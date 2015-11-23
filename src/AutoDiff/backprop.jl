@@ -7,48 +7,102 @@ macro prop(x,y)
 end
 
 function prop(c::CoTangent,x)
-	c.delta+=x
+	c.delta.+=x
 end
 
-function backprop(c::Call{:+})
-	map(x->@prop(x,c.delta),c.args)
+function backprop(x::Variable) end
+function backprop(c::Call) 
+	backprop_dispatch(c,c.args...)
 end
-
-function backprop(c::Call{:*})
-	@prop(c.args[1],c.delta*transpose(val(c.args[2])))
-	@prop(c.args[2],transpose(val(c.args[1]))*c.delta)
+function backprop_dispatch{F}(c::Call{F},args...)
+	#println("Warning: no backprop definition for $F on $(map(typeof,args))")
 end
-
-function backprop(c::Call{:-})
-	if length(c.args)==2
-		@prop(c.args[1],c.delta)
-		@prop(c.args[2],-c.delta)
-	else
-		@prop(c.args[1],-c.delta)
+function backprop(x::Lift)
+	for (a,b) in zip(x.args,x.delta)
+		@prop(a,b)
 	end
 end
 
-function backprop(c::Call{:/})
-	@prop(c.args[1],c.delta/val(c.args[2]))
-	@prop(c.args[2],-c.delta.*val(c.args[1])/val(c.args[2])^2)
+function backprop_dispatch(c::Call{:+},args...)
+	map(x->@prop(x,c.delta),args)
 end
 
-function backprop(c::Call{:.^})
-	@prop(c.args[1],c.delta.*val(c.args[2]).*val(c.args[1]).^(val(c.args[2]-1)))
+function backprop_dispatch(c::Call{:*},A,B)
+	@prop(A,c.delta*transpose(val(B)))
+	@prop(B,transpose(val(A))*c.delta)
 end
 
-function backprop(c::Call{:sigmoid})
-	@prop(c.args[1],c.delta .* val(c) .* (1.0-val(c)))
+function backprop_dispatch(c::Call{:-},x)
+	@prop(x,-c.delta)
+end
+function backprop_dispatch(c::Call{:-},x,y)
+	@prop(x,c.delta)
+	@prop(y,-c.delta)
 end
 
-function backprop(c::Call{:rect_lin})
-	@prop(c.args[1],!map(signbit,val(c.args[1])).*c.delta)
+function backprop_dispatch(c::Call{:/},A,B)
+	@prop(A,c.delta/val(B))
+	@prop(B,-c.delta.*val(A)/val(B)^2)
 end
 
-function backprop(c::Call{:exp})
-	@prop(c.args[1],c.delta .* val(c))
+function backprop_dispatch(c::Call{:.^},A,n::Real)
+	@prop(A,c.delta.*n.*val(A).^(n-1))
 end
 
-function backprop(c::Call{:log})
-	@prop(c.args[1],c.delta./val(c.args[1]))
+function backprop_dispatch(c::Call{:sigmoid},A)
+	@prop(A, c.delta .* val(c) .* (1.0-val(c)))
+end
+
+function backprop_dispatch(c::Call{:rect_lin},A)
+	@prop(A,!map(signbit,val(A)).*c.delta)
+end
+
+function backprop_dispatch(c::Call{:exp},A)
+	@prop(A,c.delta .* val(c))
+end
+
+function backprop_dispatch(c::Call{:log},A)
+	@prop(A,c.delta./val(A))
+end
+
+function backprop_dispatch(c::Call{:sum},A)
+	@prop(A,Any[c.delta])
+end
+
+
+
+macro downcast_prop(x,y)
+	quote
+		if is_CoTangent($x)
+			downcast_prop($x,$y)
+		end
+	end
+end
+
+function downcast_prop(c::CoTangent,x)
+	reduction_dims=filter(k->size(c.delta,k)==1,1:length(size(x)))
+	c.delta+=sum(x,reduction_dims)
+end
+function downcast_prop{T<:Real}(c::CoTangent{T},x)
+	c.delta+=sum(x)
+end
+
+function backprop_dispatch(c::Call{:.*},A,B)
+	@downcast_prop(A,c.delta .* val(B))
+	@downcast_prop(B,c.delta .* val(A))
+end
+function backprop_dispatch(c::Call{:.-},A,B)
+	@downcast_prop(A,c.delta)
+	@downcast_prop(B,-c.delta)
+end
+function backprop_dispatch(c::Call{:.-},A)
+	@downcast_prop(A,-c.delta)
+end
+function backprop_dispatch(c::Call{:.+},args...)
+	map(x->@downcast_prop(x,c.delta),args)
+end
+
+function backprop_dispatch(c::Call{:./},A,B)
+	@downcast_prop(A,c.delta./val(B))
+	@downcast_prop(B,-c.delta.*val(A)./val(B).^2)
 end

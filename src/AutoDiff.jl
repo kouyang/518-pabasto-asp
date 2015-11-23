@@ -2,12 +2,12 @@ __precompile__()
 
 module AutoDiff
 using DataStructures
-export Variable, Call, CoTangent, val
+export Variable, Call, CoTangent, Lift, val
 export rect_lin,sigmoid,convolve
 export minimize
 
 import Base: (+), (-), (*), (/), (^), 
-(.+), (.-), (.*), (./), (.^), exp, log
+(.+), (.-), (.*), (./), (.^), exp, log, sum
 
 begin
 	#my_zero(x) returns an array of zeros of the same shape as x
@@ -23,7 +23,7 @@ begin
 	end
 end
 
-#Type CoTangents stores a value of type T and a derivative
+#Type CoTangent{T} stores a value of type T and a derivative
 abstract CoTangent{T}
 type Variable{T} <: CoTangent{T}
 	val::T
@@ -37,12 +37,22 @@ is_CoTangent(x)=false
 
 type Call{F,T} <: CoTangent{T}
 	f::Function
-	args
+	args::Tuple
 	val::T
 	delta::T
 	function Call(f,args,v,delta)
 		new(f,args,v,delta)
 	end
+end
+
+type Lift{T}<:CoTangent{T}
+	args
+	val::T
+	delta::T
+end
+function Lift(args)
+	tmp=map(val,args)
+	Lift(args,tmp,my_zero(tmp))
 end
 
 val(x)=x
@@ -54,6 +64,9 @@ Call{T}(f::Function,args,val::T)=Call{Base.function_name(f),T}(f,args,val,my_zer
 begin
 	function execute(x::Call)
 		x.val=x.f(map(val,x.args)...)
+	end
+	function execute(x::Lift)
+		x.val=map(val,x.args)
 	end
 	function execute(x) end
 end
@@ -68,12 +81,13 @@ begin
 	function reset_delta{T<:Real}(t::CoTangent{T})
 		t.delta=zero(T)
 	end
-	function reset_delta{T<:Real}(t::CoTangent{Array{T}})
+	function reset_delta{T<:Array}(t::CoTangent{T})
 		clear_array(t.delta)
 	end
 end
 
-function backprop(c) end
+function backprop end
+
 function compute_grad(expr,l)
 	map(reset_delta,l)
 	expr.delta=1
@@ -100,7 +114,7 @@ end
 
 function depth_first_map(f,t::CoTangent)
 	visited=Set()
-	function traverse(c::Call)
+	function traverse(c::Union{Call,Lift})
 		if !(c in visited)
 			for child in c.args
 				traverse(child)
@@ -129,4 +143,10 @@ include("AutoDiff/printing.jl")
 include("AutoDiff/backprop.jl")
 include("AutoDiff/call_defs.jl")
 
+function sigmoid(x)
+	1 ./(1 .+exp(-x))
+end
+function rect_lin(x)
+	max(x,0)
+end
 end

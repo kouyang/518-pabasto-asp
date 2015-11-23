@@ -15,4 +15,4 @@ function def_diff_unary(f::Symbol)
 	)
 end
 map(def_diff_binary,[:+,:*,:-,:/,:.+,:.-,:.*,:./,:.^])
-map(def_diff_unary,[:-,:sigmoid,:rect_lin,:exp,:log])
+map(def_diff_unary,[:-,:sigmoid,:rect_lin,:exp,:log,:sum])
