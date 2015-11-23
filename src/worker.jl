@@ -24,10 +24,10 @@ function worker(master_recv_channel, master_send_channel, pserver_gradient_updat
 		grad=compute_gradient(state,dataset);
 		
 		println("Sending gradient updates")
-		put!(state.pserver_gradient_update_channel, "Delivery of gradient updates");
+		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
 		
 		println("Requesting parameter value updates")
-		put!(state.pserver_update_request_channel, "Please send me parameter value updates");
+		put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
 		
 	end
 end

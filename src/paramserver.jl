@@ -10,8 +10,28 @@ end
 local_state=nothing
 
 #main paramserver loop
-function paramserver(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+function paramserver_setup(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel)
 	global local_state = ParamServerState(ConcreteParameter(), master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+end
+
+function paramserver()
+	while true
+		boo1 = isready(master_recv_channel);
+		
+		if boo1
+			break
+		end
+		
+		output1 = remotecall_fetch(1, get_pserver_gradient_update_channel);
+		
+		output2 = remotecall_fetch(1, get_pserver_update_request_channel);
+		
+		if output2 != nothing
+			channel = output2.worker_recv_channel;
+			put!(channel, SendParameterUpdateMessage(ConcreteParameter()));
+		end
+		
+	end
 end
 
 function write_params(gradient::Gradient)
