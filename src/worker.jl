@@ -3,11 +3,11 @@ type WorkerState
 	current_params::Parameter
 	meta_params
 	dataset
-	master_channel
-	pserver_recv_channel
-	pserver_send_channel
-	worker_id
-	pserver_id
+	master_recv_channel
+	master_send_channel
+	pserver_gradient_update_channel
+	pserver_update_request_channel
+	pserver_recv_update_channel
 end
 
 function compute_gradient(params,dataset)
@@ -18,15 +18,16 @@ function compute_gradient(params,dataset)
 end
 
 #main worker loop
-function worker(master_channel, pserver_recv_channel, pserver_send_channel, worker_id, pserver_id)
-	state=WorkerState(ConcreteParameter(),nothing, nothing, master_channel, pserver_recv_channel, pserver_send_channel, worker_id, pserver_id)
+function worker(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	state=WorkerState(ConcreteParameter(),nothing, nothing, master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	for i in 1:10
-		grad=compute_gradient(state,dataset)
-
-		#fetch parameters
-		state.current_params=fetch(remotecall(state.pserver_id,read_params))
-
-		#write params to parameter server
-		remotecall(state.pserver_id,write_params,grad)
+		grad=compute_gradient(state,dataset);
+		
+		println("Sending gradient updates")
+		put!(state.pserver_gradient_update_channel, "Delivery of gradient updates");
+		
+		println("Requesting parameter value updates")
+		put!(state.pserver_update_request_channel, "Please send me parameter value updates");
+		
 	end
 end
