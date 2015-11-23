@@ -9,6 +9,7 @@ function compute_gradient(params,dataset)
 	println("Computing gradients")
 	sleep(1)
 	#fill me
+	return ConcreteGradient()
 end
 
 #main worker loop

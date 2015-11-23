@@ -27,5 +27,5 @@ add_workers(3)
 
 #wait for all workers to finish
 for (id,ref) in PABASTO.workers
-	println(fetch(ref))
+	fetch(ref)
 end
