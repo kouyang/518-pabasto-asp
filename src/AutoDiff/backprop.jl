@@ -1,13 +1,14 @@
 macro prop(x,y)
 	quote
 		if is_CoTangent($x)
+			#@devec ($x).delta += $y
 			prop($x,$y)
 		end
 	end
 end
 
 function prop(c::CoTangent,x)
-	c.delta.+=x
+	c.delta += x
 end
 
 function backprop(x::Variable) end
@@ -65,9 +66,6 @@ function backprop_dispatch(c::Call{:log},A)
 	@prop(A,c.delta./val(A))
 end
 
-function backprop_dispatch(c::Call{:sum},A)
-	@prop(A,Any[c.delta])
-end
 
 
 
@@ -80,7 +78,13 @@ macro downcast_prop(x,y)
 end
 
 function downcast_prop(c::CoTangent,x)
-	reduction_dims=filter(k->size(c.delta,k)==1,1:length(size(x)))
+	#reduction_dims=filter(k->size(c.delta,k)==1,1:length(size(x)))
+	reduction_dims=[]
+	for i in 1:length(size(x))
+		if size(c.delta,i)==1
+			push!(reduction_dims,i)
+		end
+	end
 	c.delta+=sum(x,reduction_dims)
 end
 function downcast_prop{T<:Real}(c::CoTangent{T},x)
@@ -105,4 +109,23 @@ end
 function backprop_dispatch(c::Call{:./},A,B)
 	@downcast_prop(A,c.delta./val(B))
 	@downcast_prop(B,-c.delta.*val(A)./val(B).^2)
+end
+
+
+
+macro upcast_prop(x,y)
+	quote
+		if is_CoTangent($x)
+			upcast_prop($x,$y)
+		end
+	end
+end
+function upcast_prop(c::CoTangent,y)
+	c.delta.+=y
+end
+function backprop_dispatch(c::Call{:sum},A)
+	@upcast_prop(A,Any[c.delta])
+end
+function backprop_dispatch(c::Call{:sum},A,dims)
+	@upcast_prop(A,c.delta)
 end

@@ -18,6 +18,7 @@ println("y: $(val(y))")
 
 #=
 using MNIST
+using Images,ImageView
 
 N=60000
 data=traindata()[1][:,1:N]/256
@@ -39,22 +40,46 @@ end
 digit=Call(getdigit,())
 label=Call(getlabel,(digit,))
 
-weights1=Variable(randn((10,784)))
-biases1=Variable(randn((10,)))
+weights1=Variable(0.01*randn((10,784)))
+biases1=Variable(0.01*randn((10,)))
 function prediction(digit)
 	layer1=rect_lin(weights1*digit.+biases1)
 	tmp=exp(layer1)
 	tmp./sum(tmp)
 end
 
+begin #viewing 
+	function f(x)
+		a=x-minimum(x)
+		a/=maximum(a)
+		grayim(transpose(reshape(a,(28,28))))
+	end
+	c = canvasgrid(4,5)
+	function updateview()
+		for i in 1:10
+			view(c[i],f(val(weights1)[i,:]))
+		end
+	end
+end
+
 error=sum((prediction(digit)-label).^2)
 running_mean=0
-minimize(error,its=500000,f=(it->begin
+using ProfileView
+minimize(error,delta=0.0001,its=10)
+Profile.clear_malloc_data()
+minimize(error,delta=0.0001,its=10000)
+#=
+@profile minimize(error,delta=0.0001,its=10000,f=(it->begin
+	#=
 	global running_mean
 	running_mean=0.999*running_mean+0.001*val(error)
 	if it%1000==0
 		println("Mean error: $(running_mean)")
+		updateview()
 	end
+	=#
 end
 ))
+ProfileView.view()
+=#
 =#
