@@ -1,7 +1,7 @@
 __precompile__()
 
 module AutoDiff
-using DataStructures, Devectorize
+using DataStructures
 export Variable, Call, CoTangent, Lift, val
 export rect_lin,sigmoid,convolve
 export minimize

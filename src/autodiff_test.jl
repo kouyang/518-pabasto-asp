@@ -1,5 +1,6 @@
 using AutoDiff
 
+#=
 x=Variable(2.0)
 y=Variable(4.0)
 
@@ -15,8 +16,8 @@ println(z)
 minimize(z)
 println("x: $(val(x))")
 println("y: $(val(y))")
+=#
 
-#=
 using MNIST
 using Images,ImageView
 
@@ -54,10 +55,10 @@ begin #viewing
 		a/=maximum(a)
 		grayim(transpose(reshape(a,(28,28))))
 	end
-	c = canvasgrid(4,5)
+	#c = canvasgrid(4,5)
 	function updateview()
 		for i in 1:10
-			view(c[i],f(val(weights1)[i,:]))
+			#view(c[i],f(val(weights1)[i,:]))
 		end
 	end
 end
@@ -67,19 +68,13 @@ running_mean=0
 using ProfileView
 minimize(error,delta=0.0001,its=10)
 Profile.clear_malloc_data()
-minimize(error,delta=0.0001,its=10000)
-#=
-@profile minimize(error,delta=0.0001,its=10000,f=(it->begin
-	#=
+minimize(error,delta=0.0001,its=10000000,f=(it->begin
 	global running_mean
-	running_mean=0.999*running_mean+0.001*val(error)
+	running_mean=0.9999*running_mean+0.0001*val(error)
 	if it%1000==0
 		println("Mean error: $(running_mean)")
 		updateview()
 	end
-	=#
 end
 ))
 ProfileView.view()
-=#
-=#

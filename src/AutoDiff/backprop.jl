@@ -1,14 +1,9 @@
 macro prop(x,y)
 	quote
 		if is_CoTangent($x)
-			#@devec ($x).delta += $y
-			prop($x,$y)
+			($x).delta+=$y
 		end
 	end
-end
-
-function prop(c::CoTangent,x)
-	c.delta += x
 end
 
 function backprop(x::Variable) end
@@ -85,7 +80,7 @@ function downcast_prop(c::CoTangent,x)
 			push!(reduction_dims,i)
 		end
 	end
-	c.delta+=sum(x,reduction_dims)
+	c.delta+=reshape(sum(x,reduction_dims),size(c.delta))
 end
 function downcast_prop{T<:Real}(c::CoTangent{T},x)
 	c.delta+=sum(x)
@@ -116,16 +111,22 @@ end
 macro upcast_prop(x,y)
 	quote
 		if is_CoTangent($x)
-			upcast_prop($x,$y)
+			($x).delta .+= $y
 		end
 	end
-end
-function upcast_prop(c::CoTangent,y)
-	c.delta.+=y
 end
 function backprop_dispatch(c::Call{:sum},A)
 	@upcast_prop(A,Any[c.delta])
 end
 function backprop_dispatch(c::Call{:sum},A,dims)
 	@upcast_prop(A,c.delta)
+end
+
+
+
+function backprop_dispatch(c::Call{:getindex},A,indices...)
+	A.delta[indices...]+=c.delta
+end
+function backprop_dispatch(c::Call{:permutedims},A,perm)
+	@prop(A,ipermutedims(c.delta,perm))
 end
