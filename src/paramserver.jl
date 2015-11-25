@@ -16,19 +16,22 @@ end
 
 function paramserver()
 	while true
-		boo1 = isready(master_recv_channel);
 		
+		#=
+		boo1 = isready(master_recv_channel);
 		if boo1
 			break
 		end
+		=#
 		
-		output1 = remotecall_fetch(1, get_pserver_gradient_update_channel);
+		output1 = remotecall_fetch(get_pserver_gradient_update_channel, 1);
 		
-		output2 = remotecall_fetch(1, get_pserver_update_request_channel);
+		output2 = remotecall_fetch(get_pserver_update_request_channel, 1);
 		
 		if output2 != nothing
 			channel = output2.worker_recv_channel;
 			put!(channel, SendParameterUpdateMessage(ConcreteParameter()));
+			println("Parameter update message has been sent to worker");
 		end
 		
 	end
