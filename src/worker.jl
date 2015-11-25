@@ -29,18 +29,20 @@ function worker(master_recv_channel, master_send_channel, pserver_gradient_updat
 		println("Requesting parameter value updates")
 		put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
 		
+		#=
 		boo1 = isready(state.master_recv_channel);
 		
 		if boo1
 			break
 		end
+		=#
 		
 		boo2 = isready(state.pserver_recv_update_channel);
 		
 		if boo2
 			msg = take!(state.pserver_recv_update_channel);
 			state.current_params = msg.parameter;
-			println("Parameter value update has been received from paramserver and processed")
+			println("Worker has received and processed parameter value update")
 		end
 		
 	end

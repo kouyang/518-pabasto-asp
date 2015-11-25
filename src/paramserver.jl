@@ -16,20 +16,17 @@ end
 
 function paramserver()
 	while true
-		#println("Hii")
 		
+		#=
 		boo1 = isready(master_recv_channel);
-		#println("Hiii");
 		if boo1
 			break
 		end
+		=#
 		
-		output1 = remotecall_fetch(1, get_pserver_gradient_update_channel);
+		output1 = remotecall_fetch(get_pserver_gradient_update_channel, 1);
 		
-		output2 = remotecall_fetch(1, get_pserver_update_request_channel);
-		
-		#println("Hi")
-		#println(output2)
+		output2 = remotecall_fetch(get_pserver_update_request_channel, 1);
 		
 		if output2 != nothing
 			channel = output2.worker_recv_channel;
