@@ -1,14 +1,13 @@
 module PABASTO
-
-###Parameters###
+### Parameters ###
 abstract Parameter
 abstract Gradient
 type ConcreteParameter <: Parameter
-	#fill me
+	# fill me
 end
 
 type ConcreteGradient <: Gradient
-	#fill me
+	# fill me
 end
 
 type GradientUpdateMessage
@@ -26,13 +25,12 @@ end
 type CeaseOperationMessage
 end
 
-function update(p::ConcreteParameter,g::ConcreteGradient)
-	#update p with parameter g
+function update(p::ConcreteParameter, g::ConcreteGradient)
+	# update p with parameter g
 end
 
-#todo: split into separate modules
+# todo: split into separate modules
 include("master.jl")
 include("worker.jl")
 include("paramserver.jl")
-
 end
