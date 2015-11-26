@@ -10,7 +10,7 @@ function initialize_nodes(m, n, pserver_gradient_update_channel, pserver_update_
 		ref = @spawnat id PABASTO.paramserver()
 		push!(PABASTO.paramservers, (id, ref, master_recv_channel, master_send_channel))
 	end
-	
+
 	# add logic for dataset division, and pass to PABASTO.worker
 	new_process_ids = addprocs(m)
 	randy = RandomDevice();
@@ -22,14 +22,12 @@ function initialize_nodes(m, n, pserver_gradient_update_channel, pserver_update_
 		pserver_recv_update_channel = RemoteChannel(() -> Channel(10), id);
 		ref = @spawnat id PABASTO.worker(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 		push!(PABASTO.workers, (id, ref, master_recv_channel, master_send_channel))
+		PABASTO.add_worker_hash(id)
 	end
 end
 
 using PABASTO
-m = 3;
-n = 1;
-
-initialize_nodes(m, n, PABASTO.pserver_gradient_update_channel, PABASTO.pserver_update_request_channel)
+initialize_nodes(PABASTO.num_workers, PABASTO.num_paramservers, PABASTO.pserver_gradient_update_channel, PABASTO.pserver_update_request_channel)
 
 # wait for all workers to finish
 for (id, ref, mrc, msc) in PABASTO.workers

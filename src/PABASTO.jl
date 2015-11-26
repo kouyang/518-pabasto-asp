@@ -29,8 +29,13 @@ function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
 end
 
+num_workers = 3
+num_paramservers = 1
+
+include("hash.jl")
+
 # todo: split into separate modules
 include("master.jl")
-include("worker.jl")
 include("paramserver.jl")
+include("worker.jl")
 end

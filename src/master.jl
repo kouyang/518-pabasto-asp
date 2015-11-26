@@ -6,11 +6,8 @@ workers = Tuple{Int, Any, Any, Any}[]
 # list of tuples of (param server process id, param server process reference, master_recv_channel, master_send_channel)
 paramservers = Tuple{Int, Any, Any, Any}[]
 
-m = 3;
-n = 1;
-
-pserver_gradient_update_channel = RemoteChannel(() -> Channel(m * 10), 1);
-pserver_update_request_channel = RemoteChannel(() -> Channel(m * 10), 1);
+pserver_gradient_update_channel = RemoteChannel(() -> Channel(PABASTO.num_workers * 10), 1);
+pserver_update_request_channel = RemoteChannel(() -> Channel(PABASTO.num_workers * 10), 1);
 
 function get_pserver_gradient_update_channel()
 	if isready(pserver_gradient_update_channel)
