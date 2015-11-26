@@ -6,15 +6,9 @@ workers = Tuple{Int, Any, Any}[]
 # list of tuples of (param server process id, param server process reference, master_recv_channel)
 paramservers = Tuple{Int, Any, Any}[]
 
-master_channel = RemoteChannel(() -> Channel(PABASTO.num_workers * 10), 1);
 
-pserver_gradient_update_channel = RemoteChannel(() -> Channel(PABASTO.num_workers * 10), 1);
-pserver_update_request_channel = RemoteChannel(() -> Channel(PABASTO.num_workers * 10), 1);
 
-example_indices = collect(1:50)
-examples_per_worker = Dict()
-
-function partition_examples()
+function partition_examples(example_indices, examples_per_worker)
 	for e in example_indices
 		w = PABASTO.get_worker(e)
 		if (!haskey(examples_per_worker, w))
@@ -24,16 +18,27 @@ function partition_examples()
 	end
 end
 
-function master()
+function master(master_channel)
+	example_indices = collect(1:50)
+	examples_per_worker = Dict()
+	partition_examples(example_indices, examples_per_worker)
 	while true
-		if !isready(master_channel)
-			continue
-		end
+		#take blocks until an item is available
 		request = take!(master_channel)
 		id = request.id
 		channel = request.master_recv_channel
 		examples = []
 		for i in 1:10
+
+			#there is a new worker!
+			if !haskey(examples_per_worker,id)
+				add_worker_hash(id)
+				examples_per_worker=Dict()
+				#repartition examples
+				partition_examples(example_indices,examples_per_worker)
+				#the current partition
+				println("[MASTER] current job assignment: $(examples_per_worker)")
+			end
 			if (isempty(examples_per_worker[id]))
 				break
 			end

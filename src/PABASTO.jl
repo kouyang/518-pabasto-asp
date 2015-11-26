@@ -38,8 +38,6 @@ function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
 end
 
-num_workers = 3
-num_paramservers = 1
 
 include("hash.jl")
 
