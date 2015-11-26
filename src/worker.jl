@@ -3,8 +3,9 @@ type WorkerState
 	current_params::Parameter
 	meta_params
 	dataset
+	examples
+	master_channel
 	master_recv_channel
-	master_send_channel
 	pserver_gradient_update_channel
 	pserver_update_request_channel
 	pserver_recv_update_channel
@@ -18,9 +19,17 @@ function compute_gradient(params, dataset)
 end
 
 # main worker loop
-function worker(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	state = WorkerState(ConcreteParameter(), nothing, nothing, master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	state = WorkerState(ConcreteParameter(), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	for i in 1:10
+		if state.examples == nothing
+			has_examples = isready(state.master_recv_channel)
+			if !has_examples
+				println("[WORKER] Requesting examples")
+				put!(state.master_channel, ExamplesRequestMessage(id, state.master_recv_channel))
+			end
+			# todo: read dataset with indices in master_recv_channel
+		end
 		grad = compute_gradient(state, dataset);
 
 		println("[WORKER] Sending gradient updates")

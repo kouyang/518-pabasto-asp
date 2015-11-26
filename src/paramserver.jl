@@ -2,7 +2,6 @@
 type ParamServerState
 	params
 	master_recv_channel
-	master_send_channel
 	pserver_gradient_update_channel
 	pserver_update_request_channel
 end
@@ -10,8 +9,8 @@ end
 local_state = nothing
 
 # main paramserver loop
-function paramserver_setup(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel)
-	global local_state = ParamServerState(ConcreteParameter(), master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+function paramserver_setup(master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+	global local_state = ParamServerState(ConcreteParameter(), master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel)
 end
 
 function paramserver()

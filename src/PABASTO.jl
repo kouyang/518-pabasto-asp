@@ -22,6 +22,15 @@ type SendParameterUpdateMessage
 	parameter::ConcreteParameter
 end
 
+type ExampleIndicesMessage
+	indices::Array{Int}
+end
+
+type ExamplesRequestMessage
+	id::Int
+	master_recv_channel::RemoteChannel
+end
+
 type CeaseOperationMessage
 end
 
