@@ -1,49 +1,57 @@
-###Worker State###
+### Worker State ###
 type WorkerState
 	current_params::Parameter
 	meta_params
 	dataset
+	examples
+	master_channel
 	master_recv_channel
-	master_send_channel
 	pserver_gradient_update_channel
 	pserver_update_request_channel
 	pserver_recv_update_channel
 end
 
-function compute_gradient(params,dataset)
-	println("Computing gradients")
+function compute_gradient(params, dataset)
+	println("[WORKER] Computing gradients")
 	sleep(1)
-	#fill me
+	# fill me
 	return ConcreteGradient()
 end
 
-#main worker loop
-function worker(master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	state=WorkerState(ConcreteParameter(),nothing, nothing, master_recv_channel, master_send_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+# main worker loop
+function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	state = WorkerState(ConcreteParameter(), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	for i in 1:10
-		grad=compute_gradient(state,dataset);
-		
-		println("Sending gradient updates")
+		if state.examples == nothing
+			has_examples = isready(state.master_recv_channel)
+			if !has_examples
+				println("[WORKER] Requesting examples")
+				put!(state.master_channel, ExamplesRequestMessage(id, state.master_recv_channel))
+			end
+			# todo: read dataset with indices in master_recv_channel
+		end
+		grad = compute_gradient(state, dataset);
+
+		println("[WORKER] Sending gradient updates")
 		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
-		
-		println("Requesting parameter value updates")
+
+		println("[WORKER] Requesting parameter value updates")
 		put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
-		
+
 		#=
 		boo1 = isready(state.master_recv_channel);
-		
+
 		if boo1
 			break
 		end
 		=#
-		
+
 		boo2 = isready(state.pserver_recv_update_channel);
-		
+
 		if boo2
 			msg = take!(state.pserver_recv_update_channel);
 			state.current_params = msg.parameter;
-			println("Worker has received and processed parameter value update")
+			println("[WORKER] Worker has received and processed parameter value update")
 		end
-		
 	end
 end
