@@ -1,12 +1,5 @@
 # master launches all worker and parameter server processes
 
-# list of tuples (worker id, worker process reference, master_recv_channel)
-workers = Tuple{Int, Any, Any}[]
-
-# list of tuples of (param server process id, param server process reference, master_recv_channel)
-paramservers = Tuple{Int, Any, Any}[]
-
-
 
 function partition_examples(example_indices, examples_per_worker)
 	for e in example_indices

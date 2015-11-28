@@ -11,16 +11,10 @@ type WorkerState
 	pserver_recv_update_channel
 end
 
-function compute_gradient(params, dataset)
-	println("[WORKER] Computing gradients")
-	sleep(1)
-	# fill me
-	return ConcreteGradient()
-end
-
+include("gradient_computations.jl")
 # main worker loop
 function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	state = WorkerState(ConcreteParameter(), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	for i in 1:10
 		if state.examples == nothing
 			has_examples = isready(state.master_recv_channel)
@@ -30,7 +24,7 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 			end
 			# todo: read dataset with indices in master_recv_channel
 		end
-		grad = compute_gradient(state, dataset);
+		grad = compute_gradient(state.current_params, 100:200 #=change this to the assigned indices=#);
 
 		println("[WORKER] Sending gradient updates")
 		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));

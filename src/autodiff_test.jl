@@ -1,6 +1,5 @@
 using AutoDiff
 
-#=
 x=Variable(2.0)
 y=Variable(4.0)
 
@@ -16,8 +15,8 @@ println(z)
 minimize(z)
 println("x: $(val(x))")
 println("y: $(val(y))")
-=#
 
+#=
 using MNIST
 using Images,ImageView
 
@@ -78,3 +77,4 @@ minimize(error,delta=0.0001,its=10000000,f=(it->begin
 end
 ))
 ProfileView.view()
+=#

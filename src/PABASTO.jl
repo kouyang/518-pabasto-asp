@@ -3,15 +3,13 @@ module PABASTO
 abstract Parameter
 abstract Gradient
 type ConcreteParameter <: Parameter
-	# fill me
 end
 
 type ConcreteGradient <: Gradient
-	# fill me
 end
 
 type GradientUpdateMessage
-	gradient::ConcreteGradient
+	gradient::Gradient
 end
 
 type ParameterUpdateRequestMessage

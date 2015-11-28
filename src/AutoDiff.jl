@@ -27,10 +27,9 @@ end
 abstract CoTangent{T}
 type Variable{T} <: CoTangent{T}
 	val::T
-	grad::T
 	delta::T
 end
-Variable{T}(val::T)=Variable{T}(val,my_zero(val),my_zero(val))
+Variable{T}(val::T)=Variable{T}(val,my_zero(val))
 
 is_CoTangent(x::CoTangent)=true
 is_CoTangent(x)=false
@@ -88,6 +87,33 @@ end
 
 function backprop end
 
+#returns a function which computes f'
+#expects a function f which takes an array of vars
+#and an array of constants
+function derivative(f, vars, constants)
+	wrapped_vars=map(x->Variable(x),vars)
+	A=f(wrapped_vars,constants)
+	output=f(wrapped_vars,constants)
+	l=topological_order(output)
+	function update_params(new_params)
+		for (x,y) in zip(wrapped_vars,new_params)
+			x.val=y
+		end
+	end
+	function accumulate_gradient(constants)
+		output.delta=1
+		map(backprop,reverse(l))
+		return map(x->x.delta,wrapped_vars)
+	end
+	function take_gradient()
+		t=map(x->x.delta,wrapped_vars)
+		map(reset_delta,l)
+		return t
+	end
+
+	return (update_params,accumulate_gradient,take_gradient)
+end
+
 function compute_grad(expr,l)
 	map(reset_delta,l)
 	expr.delta=1
@@ -95,19 +121,17 @@ function compute_grad(expr,l)
 end
 begin
 	function descend(d::Variable,delta,momentum)
-		d.grad .*= momentum
-		d.grad += d.delta
-		d.val -= delta.*d.grad
+		d.val -= delta.*d.delta
 	end
 	function descend(d::CoTangent,delta,momentum) end
 end
-function minimize(c::CoTangent;delta=0.01,its=1000,momentum=0,f=(it->nothing))
+function minimize(c::CoTangent;delta=0.01,its=1000,f=(it->nothing))
 	l=topological_order(c)
 	for i in 1:its
 		map(execute,l)
 		f(i)
 		compute_grad(c,l)
-		map(x->descend(x,delta,momentum), l)
+		map(x->descend(x,delta), l)
 	end
 end
 
