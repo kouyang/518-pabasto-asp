@@ -22,26 +22,29 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 				println("[WORKER] Requesting examples")
 				put!(state.master_channel, ExamplesRequestMessage(id, state.master_recv_channel))
 			end
-			# todo: read dataset with indices in master_recv_channel
+			# read dataset with indices in master_recv_channel
+			msg = take!(state.master_recv_channel);
+			state.examples = msg.indices;
 		end
-		grad = compute_gradient(state.current_params, 100:200 #=change this to the assigned indices=#);
-
+		# compute gradient using assigned indices
+		grad = compute_gradient(state.current_params, state.examples);
+		
 		println("[WORKER] Sending gradient updates")
 		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
-
+		
 		println("[WORKER] Requesting parameter value updates")
 		put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
-
+		
 		#=
 		boo1 = isready(state.master_recv_channel);
-
+		
 		if boo1
 			break
 		end
 		=#
-
+		
 		boo2 = isready(state.pserver_recv_update_channel);
-
+		
 		if boo2
 			msg = take!(state.pserver_recv_update_channel);
 			state.current_params = msg.parameter;
