@@ -13,9 +13,17 @@ end
 
 include("gradient_computations.jl")
 
+tau = 5.0;
+
 # main worker loop
 function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	global tau
+	
 	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	
+	time_var = now();
+	param_update_request_sent = false;
+	
 	while true
 		if state.examples == nothing
 			has_examples = isready(state.master_recv_channel)
@@ -41,15 +49,24 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 		println("[WORKER] Sending gradient updates")
 		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
 		
-		println("[WORKER] Requesting parameter value updates")
-		put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
-		
-		boo2 = isready(state.pserver_recv_update_channel);
-		
-		if boo2
+		if isready(state.pserver_recv_update_channel)
 			msg = take!(state.pserver_recv_update_channel);
 			state.current_params = msg;
+			time_var = now();
+			param_update_request_sent = false;
 			println("[WORKER] Worker has received and processed parameter value update")
 		end
+		
+		time_tmp = now();
+		# time in milliseconds
+		time_elapsed = Int(time_tmp - time_var);
+		
+		if time_elapsed >= tau * 1000 && !param_update_request_sent
+			println("[WORKER] Requesting parameter value updates")
+			println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
+			put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
+			param_update_request_sent = true;
+		end
+		
 	end
 end
