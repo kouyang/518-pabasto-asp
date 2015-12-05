@@ -19,7 +19,7 @@ function partition_examples(example_indices, examples_per_worker)
 	end
 end
 
-function master(master_channel)
+function master(master_channel, pserver_gradient_update_channel, pserver_update_request_channel,pserver_ids,worker_ids)
 	global num_train_examples
 	global train_examples_processed
 	global batch_size
@@ -28,40 +28,13 @@ function master(master_channel)
 	partition_examples(example_indices, examples_per_worker)
 	while true
 		#take blocks until an item is available
-		request = take!(master_channel)
-		id = request.id
-		channel = request.master_recv_channel
-		examples = []
-		
-		if !haskey(examples_per_worker, id)
-			add_worker_hash(id)
-			examples_per_worker=Dict()
-			#repartition examples
-			partition_examples(example_indices,examples_per_worker)
-			#the current partition
-			#println("[MASTER] current job assignment: $(examples_per_worker)")
-		end
-		
-		worker_example_indices = examples_per_worker[id];
-		count = 0;
-		i = 1;
-		
-		while count < batch_size && i <= length(worker_example_indices)
-			example_id = worker_example_indices[i];
-			flag_proc = train_examples_processed[example_id];
-			if flag_proc == 0
-				push!(examples, example_id);
-				train_examples_processed[example_id] = 1;
-				count = count + 1;
-			end
-			i = i + 1;
-		end
-		
-		#=
-		for i in 1:10
+		if isready(master_channel)
+			request = take!(master_channel)
+			id = request.id
+			channel = request.master_recv_channel
+			examples = []
 
-			#there is a new worker!
-			if !haskey(examples_per_worker,id)
+			if !haskey(examples_per_worker, id)
 				add_worker_hash(id)
 				examples_per_worker=Dict()
 				#repartition examples
@@ -69,32 +42,53 @@ function master(master_channel)
 				#the current partition
 				#println("[MASTER] current job assignment: $(examples_per_worker)")
 			end
-			if (isempty(examples_per_worker[id]))
-				break
+
+			worker_example_indices = examples_per_worker[id];
+			count = 0;
+			i = 1;
+
+			while count < batch_size && i <= length(worker_example_indices)
+				example_id = worker_example_indices[i];
+				flag_proc = train_examples_processed[example_id];
+				if flag_proc == 0
+					push!(examples, example_id);
+					train_examples_processed[example_id] = 1;
+					count = count + 1;
+				end
+				i = i + 1;
 			end
-			push!(examples, 1)
-			deleteat!(examples_per_worker[id], 1)
+
+			#=
+			for i in 1:10
+
+				#there is a new worker!
+				if !haskey(examples_per_worker,id)
+					add_worker_hash(id)
+					examples_per_worker=Dict()
+					#repartition examples
+					partition_examples(example_indices,examples_per_worker)
+					#the current partition
+					#println("[MASTER] current job assignment: $(examples_per_worker)")
+				end
+				if (isempty(examples_per_worker[id]))
+					break
+				end
+				push!(examples, 1)
+				deleteat!(examples_per_worker[id], 1)
+			end
+			=#
+
+
+			#currently, all parameters are passed through the master
+			#this we need parameters to be send directly from workers to paramservers
+			put!(channel, ExampleIndicesMessage(examples));
+			println("[MASTER] Assigned more examples to worker ", id)
 		end
-		=#
-		
-		put!(channel, ExampleIndicesMessage(examples));
-		println("[MASTER] Assigned more examples to worker ", id)
+		while isready(pserver_gradient_update_channel)
+			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_gradient_update_channel))
+		end
+		while isready(pserver_update_request_channel)
+			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_update_request_channel))
+		end
 	end
 end
-
-function get_pserver_gradient_update_channel()
-	if isready(pserver_gradient_update_channel)
-		return take!(pserver_gradient_update_channel)
-	else
-		return nothing
-	end
-end
-
-function get_pserver_update_request_channel()
-	if isready(pserver_update_request_channel)
-		return take!(pserver_update_request_channel)
-	else
-		return nothing
-	end
-end
-

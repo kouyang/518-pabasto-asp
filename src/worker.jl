@@ -44,7 +44,7 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 
 		if boo2
 			msg = take!(state.pserver_recv_update_channel);
-			state.current_params = msg.parameter;
+			state.current_params = msg;
 			println("[WORKER] Worker has received and processed parameter value update")
 		end
 	end

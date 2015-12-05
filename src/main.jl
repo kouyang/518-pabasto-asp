@@ -12,13 +12,13 @@ function initialize_nodes(m, n, master_channel, pserver_gradient_update_channel,
 		using PABASTO
 	end
 
-	@spawnat master_id PABASTO.master(master_channel)
+	@spawnat master_id PABASTO.master(master_channel,pserver_gradient_update_channel, pserver_update_request_channel,pserver_ids,worker_ids)
 
 	for id in pserver_ids
 		# todo: remove wait
 		master_recv_channel = RemoteChannel(() -> Channel(10), id);
 		remotecall_fetch(PABASTO.paramserver_setup, id, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel);
-		ref = @spawnat id PABASTO.paramserver()
+		ref = @spawnat id PABASTO.paramserver(master_recv_channel,pserver_gradient_update_channel,pserver_update_request_channel)
 		push!(paramservers, (id, ref, master_recv_channel))
 	end
 
