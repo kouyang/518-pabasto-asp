@@ -15,7 +15,7 @@ include("gradient_computations.jl")
 # main worker loop
 function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	for i in 1:10
+	for i = 1:10
 		if state.examples == nothing
 			has_examples = isready(state.master_recv_channel)
 			if !has_examples
@@ -26,8 +26,12 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 			msg = take!(state.master_recv_channel);
 			state.examples = msg.indices;
 		end
+		
 		# compute gradient using assigned indices
 		grad = compute_gradient(state.current_params, state.examples);
+		
+		# examples processed - reset field so that worker knows to request more examples
+		state.examples = nothing;
 		
 		println("[WORKER] Sending gradient updates")
 		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
