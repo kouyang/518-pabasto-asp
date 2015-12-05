@@ -42,6 +42,10 @@ function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
 end
 
+function add_proc()
+	return fetch(@spawnat 1 Main.add_pabasto_proc())
+end
+
 # todo: split into separate modules
 include("master.jl")
 include("paramserver.jl")
