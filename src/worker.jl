@@ -6,20 +6,19 @@ type WorkerState
 	examples
 	master_channel
 	master_recv_channel
+	master_control_channel
 	pserver_gradient_update_channel
 	pserver_update_request_channel
 	pserver_recv_update_channel
+	tau
 end
 
 include("gradient_computations.jl")
 
-tau = 5.0;
-
 # main worker loop
-function worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	global tau
+function worker(id, master_channel, master_recv_channel, master_control_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 	
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_channel, master_recv_channel, master_control_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel, 5.0)
 	
 	time_var = now();
 	param_update_request_sent = false;
@@ -61,11 +60,17 @@ function worker(id, master_channel, master_recv_channel, pserver_gradient_update
 		# time in milliseconds
 		time_elapsed = Int(time_tmp - time_var);
 		
-		if time_elapsed >= tau * 1000 && !param_update_request_sent
+		if time_elapsed >= state.tau * 1000 && !param_update_request_sent
 			println("[WORKER] Requesting parameter value updates")
 			println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
 			put!(state.pserver_update_request_channel, ParameterUpdateRequestMessage(state.pserver_recv_update_channel));
 			param_update_request_sent = true;
+		end
+		
+		if isready(state.master_control_channel)
+			msg = take!(master_control_channel);
+			state.tau = msg.tau;
+			println("[WORKER] Worker has received and processed control policy message")
 		end
 		
 	end

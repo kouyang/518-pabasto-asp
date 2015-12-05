@@ -32,6 +32,12 @@ end
 type CeaseOperationMessage
 end
 
+type AdaptiveControlPolicyMessage
+	tau::Float64
+	num_workers::Int
+	batch_size::Int
+end
+
 function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
 end
