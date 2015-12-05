@@ -7,6 +7,9 @@ num_train_examples = size(train_examples, 2)
 num_processed_examples = 0
 batch_size = 10
 
+#REMOVE LATER
+num_train_examples = 1000;
+
 function handle_request(request::ExamplesRequestMessage)
 	global num_train_examples
 	global num_processed_examples
