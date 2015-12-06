@@ -41,6 +41,7 @@ end
 
 # main worker loop
 function worker(id, master_mailbox, worker_mailbox)
+	println("[WORKER] initialized")
 
 	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_mailbox,worker_mailbox,1.0,now(),false)
 
