@@ -19,21 +19,25 @@ function handle(state::WorkerState, message::ExampleIndicesMessage)
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(myid(), state.worker_mailbox))
 end
+
 function handle(state::WorkerState, message::ParameterUpdateMessage)
 	state.current_params = message.parameters;
 	state.time_var = now();
 	state.param_request_pending=false
 	println("[WORKER] Worker has received and processed parameter value update")
 end
+
 function handle(state::WorkerState, msg::AdaptiveControlPolicyMessage)
 	state.batch_size = msg.batch_size;
 	state.tau = msg.tau;
 	println("[WORKER] Worker has received and processed control policy message")
 end
+
 function handle(s::WorkerState,state::Void)
 	println("[WORKER] Spinning")
 	sleep(1)
 end
+
 function handle{T}(s, state::T)
 	println("Handler not defined for $(T)")
 end
