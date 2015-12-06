@@ -10,29 +10,37 @@ pserver_gradient_update_channel = RemoteChannel(() -> Channel(num_workers * 10),
 pserver_update_request_channel = RemoteChannel(() -> Channel(num_workers * 10), 1)
 
 function initialize_nodes(master_channel)
-	for i = 1:num_paramservers
-		add_paramserver()
-	end
-	for i = 1:num_workers
-		add_worker(master_channel)
-	end
+	add_paramservers(num_paramservers)
+	add_workers(num_workers, master_channel)
 end
 
 function add_paramserver()
-	id = add_proc()
+	add_paramservers(1)
+end
+
+function add_paramservers(count)
+	ids = add_procs(count)
 	# todo: remove wait
-	master_recv_channel = RemoteChannel(() -> Channel(10), id);
-	remotecall_fetch(paramserver_setup, id, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel);
-	ref = @spawnat id paramserver()
-	push!(paramservers, (id, ref, master_recv_channel))
+	for id in ids
+		master_recv_channel = RemoteChannel(() -> Channel(10), id)
+		remotecall_fetch(paramserver_setup, id, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+		ref = @spawnat id paramserver()
+		push!(paramservers, (id, ref, master_recv_channel))
+	end
 end
 
 function add_worker(master_channel)
-	id = add_proc()
-	master_recv_channel = RemoteChannel(() -> Channel(10), id);
-	pserver_recv_update_channel = RemoteChannel(() -> Channel(10), id);
-	ref = @spawnat id worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-	push!(workers, (id, ref, master_recv_channel))
+	add_workers(1, master_channel)
+end
+
+function add_workers(count, master_channel)
+	ids = add_procs(count)
+	for id in ids
+		master_recv_channel = RemoteChannel(() -> Channel(10), id)
+		pserver_recv_update_channel = RemoteChannel(() -> Channel(10), id)
+		ref = @spawnat id worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
+		push!(workers, (id, ref, master_recv_channel))
+	end
 end
 
 ### REQUEST HANDLING ###
@@ -59,9 +67,9 @@ function handle_request(request::ExamplesRequestMessage)
 
 	id = request.id
 	channel = request.master_recv_channel
-	examples = []
 
 	count = 0;
+	examples = []
 	while count < batch_size && num_processed_examples < num_train_examples
 		example_id = num_processed_examples + 1
 		push!(examples, example_id)
@@ -69,13 +77,18 @@ function handle_request(request::ExamplesRequestMessage)
 		num_processed_examples = num_processed_examples + 1
 	end
 
-	put!(channel, ExampleIndicesMessage(examples));
+	put!(channel, ExampleIndicesMessage(examples))
 	if (isempty(examples))
 		println("[MASTER] Processed all examples")
 		return false
 	end
 	println("[MASTER] Assigned examples $(examples) to worker $(id)")
 	return true
+end
+
+# Handle cease operation message
+function handle_request(request::CeaseOperationMessage)
+	return false
 end
 
 function master(master_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_ids, worker_ids, paramservers, workers)
@@ -106,6 +119,7 @@ function master(master_channel, pserver_gradient_update_channel, pserver_update_
 			end
 			println("[MASTER] Control Policy Messages Sent");
 		end
+	end
 end
 
 function get_pserver_gradient_update_channel()

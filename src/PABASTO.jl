@@ -42,8 +42,8 @@ function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
 end
 
-function add_proc()
-	return fetch(@spawnat 1 Main.add_pabasto_proc())
+function add_procs(count)
+	return fetch(@spawnat 1 Main.add_pabasto_procs(count))
 end
 
 # todo: split into separate modules
