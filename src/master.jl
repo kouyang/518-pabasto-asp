@@ -29,6 +29,11 @@ function add_paramservers(count)
 	end
 end
 
+function remove_paramserver()
+	id, ref, master_recv_channel = pop!(paramservers)
+	put!(master_recv_channel, CeaseOperationMessage())
+end
+
 function add_worker(master_channel)
 	add_workers(1, master_channel)
 end
@@ -41,6 +46,11 @@ function add_workers(count, master_channel)
 		ref = @spawnat id worker(id, master_channel, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
 		push!(workers, (id, ref, master_recv_channel))
 	end
+end
+
+function remove_worker()
+	id, ref, master_recv_channel = pop!(workers)
+	put!(master_recv_channel, CeaseOperationMessage())
 end
 
 ### REQUEST HANDLING ###
@@ -64,6 +74,8 @@ function handle_request(request::ExamplesRequestMessage)
 	global num_train_examples
 	global num_processed_examples
 	global batch_size
+
+	global shut
 
 	id = request.id
 	channel = request.master_recv_channel
@@ -91,7 +103,7 @@ function handle_request(request::CeaseOperationMessage)
 	return false
 end
 
-function master(master_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_ids, worker_ids, paramservers, workers)
+function master(master_channel)
 	while true
 		if isready(master_channel)
 			request = take!(master_channel)
@@ -117,7 +129,7 @@ function master(master_channel, pserver_gradient_update_channel, pserver_update_
 				worker_control_channel = worker_tup[4];
 				put!(worker_control_channel, msg);
 			end
-			println("[MASTER] Control Policy Messages Sent");
+			println("[MASTER] Control policy messages sent");
 		end
 	end
 end

@@ -31,8 +31,12 @@ function worker(id, master_channel, master_recv_channel, master_control_channel,
 				put!(state.master_channel, ExamplesRequestMessage(id, state.master_recv_channel))
 			end
 			# read dataset with indices in master_recv_channel
-			msg = take!(state.master_recv_channel);
-			state.examples = msg.indices;
+			msg = take!(state.master_recv_channel)
+			if typeof(msg) == CeaseOperationMessage
+				println("[WORKER] Worker $(id) is shutting down")
+				return
+			end
+			state.examples = msg.indices
 		end
 
 		if length(state.examples) == 0
@@ -46,7 +50,7 @@ function worker(id, master_channel, master_recv_channel, master_control_channel,
 		state.examples = nothing;
 
 		println("[WORKER] Sending gradient updates")
-		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad));
+		put!(state.pserver_gradient_update_channel, GradientUpdateMessage(grad))
 
 		if isready(state.pserver_recv_update_channel)
 			msg = take!(state.pserver_recv_update_channel);
@@ -59,7 +63,6 @@ function worker(id, master_channel, master_recv_channel, master_control_channel,
 		time_tmp = now();
 		# time in milliseconds
 		time_elapsed = Int(time_tmp - time_var);
-
 		if time_elapsed >= state.tau * 1000 && !param_update_request_sent
 			println("[WORKER] Requesting parameter value updates")
 			println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
