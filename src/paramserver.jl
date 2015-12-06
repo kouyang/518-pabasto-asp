@@ -15,8 +15,8 @@ end
 #=
 function paramserver()
 	while true
-		if isready(master_recv_channel)
-			msg = take!(state.master_recv_channel)
+		if isready(master_mailbox) # wrong
+			msg = take!(state.master_mailbox)
 			if typeof(msg) == CeaseOperationMessage
 				println("[PARAM SERVER] Param server $(id) is shutting down")
 				return
@@ -27,8 +27,8 @@ function paramserver()
 		output2 = remotecall_fetch(get_pserver_update_request_channel, 1)
 
 		if output2 != nothing
-			channel = output2.worker_recv_channel;
-			put!(channel, SendParameterUpdateMessage(ConcreteParameter()))
+			worker_mailbox = output2.worker_mailbox;
+			put!(worker_mailbox, SendParameterUpdateMessage(ConcreteParameter()))
 			println("[PARAM SERVER] Parameter update message has been sent to worker")
 		end
 	end
@@ -38,7 +38,7 @@ end
 function handle(message::ParameterUpdateRequestMessage)
 	global local_state
 	println("[PARAM SERVER] Reading params")
-	put!(message.worker_recv_channel,ParameterUpdateMessage(local_state.params))
+	put!(message.worker_mailbox,ParameterUpdateMessage(local_state.params))
 end
 
 function handle(message::GradientUpdateMessage)

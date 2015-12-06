@@ -1,99 +1,89 @@
 using MNIST
 
+### TYPE DEFINITION ###
+
+type MasterState
+	master_mailbox
+	paramservers
+	workers
+	num_train_examples
+	num_processed_examples
+	num_epoch
+	max_num_epoches
+	# parameters for adaptive control policy
+	tau
+	num_workers
+	num_paramservers
+	# number of examples the master sends to worker in response to ExamplesRequestMessage
+	examples_batch_size
+	# number of examples the worker processes to compute a gradient update
+	batch_size
+end
+
 ### INITIALIZATION ###
 
-workers = Tuple{Int, Any, Any}[]
-paramservers = Tuple{Int, Any}[]
-num_workers = 3
-num_paramservers = 1
-
-function initialize_nodes(master_mailbox)
-	add_paramservers(num_paramservers, master_mailbox)
-	add_workers(num_workers, master_mailbox)
+function initialize_nodes(state::MasterState)
+	add_paramservers(state, state.num_paramservers)
+	add_workers(state, state.num_workers)
 end
 
-function add_paramserver()
-	add_paramservers(1)
-end
-
-function add_paramservers(count,master_mailbox)
+function add_paramservers(state::MasterState, count)
 	ids = add_procs(count)
 	# todo: remove wait
 	for id in ids
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		remotecall_fetch(paramserver_setup, id, master_mailbox,pserver_mailbox)
-		push!(paramservers, (id, pserver_mailbox))
+		remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox)
+		push!(state.paramservers, (id, pserver_mailbox))
 	end
 end
 
-function remove_paramserver()
+function remove_paramserver(state::MasterState)
 	#=
-	id, ref, master_recv_channel = pop!(paramservers)
-	put!(master_recv_channel, CeaseOperationMessage())
+	id, pserver_mailbox = pop!(state.paramservers)
+	put!(pserver_mailbox, CeaseOperationMessage())
 	=#
 end
 
-function add_worker(master_channel)
-	add_workers(1, master_channel)
-end
-
-function add_workers(count, master_mailbox)
+function add_workers(state::MasterState, count)
 	ids = add_procs(count)
 	for id in ids
 		worker_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		ref = @spawnat id PABASTO.worker(id, master_mailbox,worker_mailbox)
-		push!(workers, (id, ref, worker_mailbox))
+		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox)
+		push!(state.workers, (id, ref, worker_mailbox))
 	end
 end
 
-function remove_worker()
-	id, ref, worker_mailbox = pop!(workers)
+function remove_worker(state::MasterState)
+	id, ref, worker_mailbox = pop!(state.workers)
 	put!(worker_mailbox, CeaseOperationMessage())
 end
 
 ### REQUEST HANDLING ###
 
-train_examples, train_labels = traindata()
-num_train_examples = size(train_examples, 2)
-num_processed_examples = 0
-
-# parameters for adaptive control policy
-tau = 5
-num_workers = 3
-batch_size = 10
-
-#REMOVE LATER
-num_train_examples = 1000;
-#REMOVE LATER
-flag = true;
-
-type MasterState
-	master_mailbox
-	pservers
-	workers
-end
-
 # Handle request from workers for more examples
 function handle(state::MasterState,request::ExamplesRequestMessage)
-	global num_train_examples
-	global num_processed_examples
-	global batch_size
-
-	global shut
-
+	
+	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.max_num_epoches
+		state.num_processed_examples = 0;
+		state.num_epoch = state.num_epoch + 1;
+	elseif state.num_processed_examples >= state.num_train_examples
+		# terminate execution
+		return false
+	end
+	
 	id = request.id
-	channel = request.master_recv_channel
+	worker_mailbox = request.worker_mailbox
 
 	count = 0;
 	examples = []
-	while count < batch_size && num_processed_examples < num_train_examples
-		example_id = num_processed_examples + 1
+	while count < state.batch_size && state.num_processed_examples < state.num_train_examples
+		example_id = state.num_processed_examples + 1
 		push!(examples, example_id)
 		count = count + 1
-		num_processed_examples = num_processed_examples + 1
+		state.num_processed_examples = state.num_processed_examples + 1
 	end
-
-	put!(channel, ExampleIndicesMessage(examples))
+	
+	put!(worker_mailbox, ExampleIndicesMessage(examples))
 	if (isempty(examples))
 		println("[MASTER] Processed all examples")
 		return false
@@ -104,12 +94,12 @@ end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
 	println("[MASTER] Dispatching GradientUpdateMessage")
-	remotecall(handle,state.pservers[rand(1:end)][1],msg)
+	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 	println("[MASTER] Dispatching ParameterUpdateRequestMessage")
-	remotecall(handle,state.pservers[rand(1:end)][1],msg)
+	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
 end
 
 function handle(state::MasterState,msg::Void)
@@ -118,21 +108,55 @@ function handle(state::MasterState,msg::Void)
 end
 
 function master()
+	
 	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
-	initialize_nodes(master_mailbox)
-	state=MasterState(master_mailbox, paramservers,workers)
+	
+	workers = Tuple{Int, Any, Any}[]
+	paramservers = Tuple{Int, Any}[]
+	
+	train_examples, train_labels = traindata()
+	num_train_examples = size(train_examples, 2)
+	num_processed_examples = 0
+	num_epoch = 1
+	max_num_epoches = 1
+	
+	# parameters for adaptive control policy
+	tau = 5.0
+	num_workers = 3
+	num_paramservers = 1
+	# number of examples the master sends to worker in response to ExamplesRequestMessage
+	examples_batch_size = 50
+	# number of examples the worker processes to compute a gradient update
+	batch_size = 10
+	
+	#REMOVE LATER
+	num_train_examples = 1000;
+	#REMOVE LATER
+	flag = true;
+	
+	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, tau, num_workers, num_paramservers, examples_batch_size, batch_size)
+	initialize_nodes(state)
 	
 	while true
 		handle(state,take!(state.master_mailbox))
-		
-		#=
-=======
+	end
+	
+end
+
+# COMMENTED OUT CODE - IGNORE
+#=
 # Handle cease operation message
 function handle_request(request::CeaseOperationMessage)
 	return false
 end
 
 function master(master_channel)
+	global tau
+	global num_workers
+	global num_paramservers
+	global example_batch_size
+	global batch_size
+	
 	while true
 		if isready(master_channel)
 			request = take!(master_channel)
@@ -152,16 +176,15 @@ function master(master_channel)
 		boo = false;
 
 		if boo
->>>>>>> d740cbecf0187b43dc307e1083fa453a439208c9
-			msg = AdaptiveControlPolicyMessage(tau, num_workers, batch_size);
+			msg = AdaptiveControlPolicyMessage(tau, num_workers, num_paramservers, example_batch_size, batch_size);
 			for i = 1:length(workers)
 				worker_tup = workers[i];
-				worker_control_channel = worker_tup[4];
-				put!(worker_control_channel, msg);
+				worker_mailbox = worker_tup[3];
+				put!(worker_mailbox, msg);
 			end
-<<<<<<< HEAD
+			
 			println("[MASTER] Control Policy Messages Sent");
-		=#
+		end
 	end
 end
 
@@ -181,3 +204,4 @@ function adaptive_control_policy()
 		return false;
 	end
 end
+=#

@@ -14,7 +14,7 @@ function put!{T}(m::Mailbox, v::T)
 		m.data[T]=Channel(100)
 	end
 	put!(m.data[T],v)
-	m
+	return m
 end
 
 function take!(m::Mailbox)
@@ -43,7 +43,7 @@ type GradientUpdateMessage
 end
 
 type ParameterUpdateRequestMessage
-	worker_recv_channel::RemoteChannel
+	worker_mailbox::RemoteChannel
 end
 
 type ParameterUpdateMessage
@@ -56,7 +56,7 @@ end
 
 type ExamplesRequestMessage
 	id::Int
-	master_recv_channel::RemoteChannel
+	worker_mailbox::RemoteChannel
 end
 
 type CeaseOperationMessage
@@ -65,6 +65,8 @@ end
 type AdaptiveControlPolicyMessage
 	tau::Float64
 	num_workers::Int
+	num_paramservers::Int
+	example_batch_size::Int
 	batch_size::Int
 end
 

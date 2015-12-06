@@ -1,9 +1,6 @@
 ### Worker State ###
 type WorkerState
 	current_params::Parameter
-	meta_params
-	dataset
-	examples
 	master_mailbox
 	worker_mailbox
 	tau
@@ -43,7 +40,7 @@ end
 function worker(id, master_mailbox, worker_mailbox)
 	println("[WORKER] initialized")
 
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), nothing, nothing, nothing, master_mailbox,worker_mailbox,1.0,now(),false)
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox,worker_mailbox,1.0,now(),false)
 
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
