@@ -1,4 +1,34 @@
 module PABASTO
+### Mailboxes ###
+import Base: put!, wait, isready, take!, fetch
+
+type Mailbox <: AbstractChannel
+	data::Dict
+	function Mailbox()
+		new(Dict())
+	end
+end
+
+function put!{T}(m::Mailbox, v::T)
+	if !haskey(m.data,T)
+		m.data[T]=Channel(100)
+	end
+	put!(m.data[T],v)
+	m
+end
+
+function take!(m::Mailbox)
+	n=length(values(m.data))
+	#iterate through channels in a random order
+	for c in collect(values(m.data))[randperm(n)]
+		if isready(c)
+			return take!(c)
+		end
+	end
+	return nothing
+end
+
+
 ### Parameters ###
 abstract Parameter
 abstract Gradient
@@ -16,8 +46,8 @@ type ParameterUpdateRequestMessage
 	worker_recv_channel::RemoteChannel
 end
 
-type SendParameterUpdateMessage
-	parameter::ConcreteParameter
+type ParameterUpdateMessage
+	parameters
 end
 
 type ExampleIndicesMessage

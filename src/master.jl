@@ -16,7 +16,13 @@ num_train_examples = 1000;
 #REMOVE LATER
 flag = true;
 
-function handle_request(request::ExamplesRequestMessage)
+type MasterState
+	master_mailbox
+	pservers
+	workers
+end
+
+function handle(state::MasterState,request::ExamplesRequestMessage)
 	global num_train_examples
 	global num_processed_examples
 	global batch_size
@@ -37,23 +43,30 @@ function handle_request(request::ExamplesRequestMessage)
 	println("[MASTER] Assigned examples $(examples) to worker $(id)")
 end
 
-function master(master_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_ids, worker_ids, paramservers, workers)
+function handle(state::MasterState,msg::GradientUpdateMessage)
+	println("[MASTER] Dispatching GradientUpdateMessage")
+	remotecall(handle,state.pservers[rand(1:end)][1],msg)
+end
+
+function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
+	println("[MASTER] Dispatching ParameterUpdateRequestMessage")
+	remotecall(handle,state.pservers[rand(1:end)][1],msg)
+end
+
+function handle(state::MasterState,msg::Void)
+	println("[MASTER] Spinning")
+	sleep(1)
+end
+
+
+
+function master(master_mailbox,paramservers, workers)
+	state=MasterState(master_mailbox, paramservers,workers)
 	
 	while true
-		if isready(master_channel)
-			handle_request(take!(master_channel))
-		end
-		while isready(pserver_gradient_update_channel)
-			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_gradient_update_channel))
-		end
-		while isready(pserver_update_request_channel)
-			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_update_request_channel))
-		end
+		handle(state,take!(state.master_mailbox))
 		
-		#boo = adaptive_control_policy();
-		boo = false;
-		
-		if boo
+		#=
 			msg = AdaptiveControlPolicyMessage(tau, num_workers, batch_size);
 			for i = 1:length(workers)
 				worker_tup = workers[i];
@@ -61,8 +74,7 @@ function master(master_channel, pserver_gradient_update_channel, pserver_update_
 				put!(worker_control_channel, msg);
 			end
 			println("[MASTER] Control Policy Messages Sent");
-		end
-		
+		=#
 	end
 end
 

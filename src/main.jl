@@ -1,13 +1,13 @@
 using PABASTO
 
 # list of tuples (worker id, worker process reference, master_recv_channel, master_control_channel)
-workers = Tuple{Int, Any, Any, Any}[]
+workers = Tuple{Int, Any, Any}[]
 
 # list of tuples of (param server process id, param server process reference, master_recv_channel)
 paramservers = Tuple{Int, Any, Any}[]
 
 # add m workers and n paramservers
-function initialize_nodes(m, n, master_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+function initialize_nodes(m, n, master_mailbox)
 	global workers
 	global paramservers
 	
@@ -23,33 +23,32 @@ function initialize_nodes(m, n, master_channel, pserver_gradient_update_channel,
 	
 	for id in pserver_ids
 		# todo: remove wait
-		master_recv_channel = RemoteChannel(() -> Channel(10), id);
-		remotecall_fetch(PABASTO.paramserver_setup, id, master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel);
-		ref = @spawnat id PABASTO.paramserver(master_recv_channel,pserver_gradient_update_channel,pserver_update_request_channel)
-		push!(paramservers, (id, ref, master_recv_channel))
+		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
+		ref = @spawnat id PABASTO.paramserver_setup(master_mailbox,pserver_mailbox)
+		push!(paramservers, (id, ref, pserver_mailbox))
+	end
+
+	for (id,ref,mailbox) in paramservers
+		wait(ref)
 	end
 	
 	for id in worker_ids
-		master_recv_channel = RemoteChannel(() -> Channel(10), id);
-		master_control_channel = RemoteChannel(() -> Channel(10), id);
-		pserver_recv_update_channel = RemoteChannel(() -> Channel(10), id);
-		ref = @spawnat id PABASTO.worker(id, master_channel, master_recv_channel, master_control_channel, pserver_gradient_update_channel, pserver_update_request_channel, pserver_recv_update_channel)
-		push!(workers, (id, ref, master_recv_channel, master_control_channel))
+		worker_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
+		ref = @spawnat id PABASTO.worker(id, master_mailbox,worker_mailbox)
+		push!(workers, (id, ref, worker_mailbox))
 	end
 	
-	@spawnat master_id PABASTO.master(master_channel,pserver_gradient_update_channel, pserver_update_request_channel, pserver_ids, worker_ids, paramservers, workers)
+	@spawnat master_id PABASTO.master(master_mailbox, paramservers, workers)
 	
 end
 
 num_workers = 3
 num_paramservers = 1
-master_channel = RemoteChannel(() -> Channel(num_workers * 10), 1)
-pserver_gradient_update_channel = RemoteChannel(() -> Channel(num_workers * 10), 1)
-pserver_update_request_channel = RemoteChannel(() -> Channel(num_workers * 10), 1)
+master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
 
-initialize_nodes(num_workers, num_paramservers, master_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+initialize_nodes(num_workers, num_paramservers, master_mailbox)
 
 # wait for all workers to finish
-for (id, ref, mrc, mcc) in workers
+for (id, ref, mailbox) in workers
 	fetch(ref)
 end
