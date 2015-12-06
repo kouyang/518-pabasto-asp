@@ -14,7 +14,6 @@ function put!{T}(m::Mailbox, v::T)
 		m.data[T]=Channel(100)
 	end
 	put!(m.data[T],v)
-	m
 end
 
 function take!(m::Mailbox)
@@ -65,15 +64,13 @@ end
 type AdaptiveControlPolicyMessage
 	tau::Float64
 	num_workers::Int
+	num_paramservers::Int
+	example_batch_size::Int
 	batch_size::Int
 end
 
 function update(p::ConcreteParameter, g::ConcreteGradient)
 	# update p with parameter g
-end
-
-function add_procs(count)
-	return fetch(@spawnat 1 Main.add_pabasto_procs(count))
 end
 
 # todo: split into separate modules
