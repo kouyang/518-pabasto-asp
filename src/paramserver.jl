@@ -1,18 +1,18 @@
 ### Param Server State ###
 type ParamServerState
 	params
-	master_recv_channel
-	pserver_gradient_update_channel
-	pserver_update_request_channel
+	master_mailbox
+	pserver_mailbox
 end
 
 local_state = nothing
 
-# main paramserver loop
-function paramserver_setup(master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel)
-	global local_state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_recv_channel, pserver_gradient_update_channel, pserver_update_request_channel)
+function paramserver_setup(master_mailbox, pserver_mailbox)
+	global local_state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,pserver_mailbox)
 end
 
+#Need to decide if paramservers will spin
+#=
 function paramserver()
 	while true
 		if isready(master_recv_channel)
@@ -33,11 +33,12 @@ function paramserver()
 		end
 	end
 end
+=#
 
 function handle(message::ParameterUpdateRequestMessage)
 	global local_state
 	println("[PARAM SERVER] Reading params")
-	put!(message.worker_recv_channel,local_state.params)
+	put!(message.worker_recv_channel,ParameterUpdateMessage(local_state.params))
 end
 
 function handle(message::GradientUpdateMessage)
