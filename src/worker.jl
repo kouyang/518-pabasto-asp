@@ -4,6 +4,7 @@ type WorkerState
 	master_mailbox
 	worker_mailbox
 	tau
+	batch_size
 	time_var
 	param_request_pending::Bool
 end
@@ -14,7 +15,7 @@ function handle(state::WorkerState, message::ExampleIndicesMessage)
 	grad=compute_gradient(state.current_params, message.indices)
 	println("[WORKER] Sending gradient updates")
 	put!(state.master_mailbox, GradientUpdateMessage(grad))
-
+	
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(myid(), state.worker_mailbox))
 end
@@ -25,6 +26,7 @@ function handle(state::WorkerState, message::ParameterUpdateMessage)
 	println("[WORKER] Worker has received and processed parameter value update")
 end
 function handle(state::WorkerState, msg::AdaptiveControlPolicyMessage)
+	state.batch_size = msg.batch_size;
 	state.tau = msg.tau;
 	println("[WORKER] Worker has received and processed control policy message")
 end
@@ -40,15 +42,15 @@ end
 function worker(id, master_mailbox, worker_mailbox)
 	println("[WORKER] initialized")
 
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox,worker_mailbox,1.0,now(),false)
-
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 20.0, 10, now(), false)
+	
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	while true
 		handle(state,take!(state.worker_mailbox))
-
+		
 		#Stale Parameter Checks
 		time_elapsed = Int(now() - state.time_var)
 		if time_elapsed >= state.tau * 1000 && !state.param_request_pending

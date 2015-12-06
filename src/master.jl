@@ -10,6 +10,7 @@ type MasterState
 	num_processed_examples
 	num_epoch
 	max_num_epoches
+	exit
 	# parameters for adaptive control policy
 	tau
 	num_workers
@@ -68,7 +69,8 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 		state.num_epoch = state.num_epoch + 1;
 	elseif state.num_processed_examples >= state.num_train_examples
 		# terminate execution
-		return false
+		state.exit = true;
+		return;
 	end
 	
 	id = request.id
@@ -76,20 +78,24 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 
 	count = 0;
 	examples = []
-	while count < state.batch_size && state.num_processed_examples < state.num_train_examples
+	while count < state.examples_batch_size && state.num_processed_examples < state.num_train_examples
 		example_id = state.num_processed_examples + 1
 		push!(examples, example_id)
 		count = count + 1
 		state.num_processed_examples = state.num_processed_examples + 1
 	end
 	
+	
 	put!(worker_mailbox, ExampleIndicesMessage(examples))
+	
+	#=
 	if (isempty(examples))
 		println("[MASTER] Processed all examples")
 		return false
 	end
+	=#
+	
 	println("[MASTER] Assigned examples $(examples) to worker $(id)")
-	return true
 end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
@@ -119,9 +125,10 @@ function master()
 	num_processed_examples = 0
 	num_epoch = 1
 	max_num_epoches = 1
+	exit = false
 	
 	# parameters for adaptive control policy
-	tau = 5.0
+	tau = 20.0
 	num_workers = 3
 	num_paramservers = 1
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
@@ -134,10 +141,10 @@ function master()
 	#REMOVE LATER
 	flag = true;
 	
-	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, tau, num_workers, num_paramservers, examples_batch_size, batch_size)
+	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, exit, tau, num_workers, num_paramservers, examples_batch_size, batch_size)
 	initialize_nodes(state)
 	
-	while true
+	while !state.exit
 		handle(state,take!(state.master_mailbox))
 	end
 	
@@ -154,7 +161,7 @@ function master(master_channel)
 	global tau
 	global num_workers
 	global num_paramservers
-	global example_batch_size
+	global examples_batch_size
 	global batch_size
 	
 	while true
@@ -191,6 +198,8 @@ end
 function adaptive_control_policy()
 	global tau
 	global num_workers
+	global num_paramservers
+	global examples_batch_size
 	global batch_size
 	global flag
 
