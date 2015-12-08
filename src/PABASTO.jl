@@ -68,9 +68,26 @@ type AdaptiveControlPolicyMessage
 	num_paramservers::Int
 	example_batch_size::Int
 	batch_size::Int
+	gossip_time::Float64
 end
 
-function update(p::ConcreteParameter, g::ConcreteGradient)
+type InitiateGossipMessage
+	# Master sends this to paramserver: here is the process id of the paramserver
+	# I want you to gossip with. The master should send this message to both members of
+	# the pair of paramservers selected for gossiping.
+	# Every gossip_time seconds, the master randomly selects two paramservers for
+	# gossiping (asynchronous gossip)
+	# Upon arrival, paramserver sends ParameterGossipMessage to process id below
+	pserver_id::Int
+end
+
+type ParameterGossipMessage
+	# When paramserver receives this message, it immediately performs gossip_average using
+	# the parameters below and its current parameters
+	parameters::Parameter
+end
+
+function update(p::Parameter, g::Gradient)
 	# update p with parameter g
 end
 

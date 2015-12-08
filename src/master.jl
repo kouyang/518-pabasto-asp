@@ -10,6 +10,7 @@ type MasterState
 	num_processed_examples
 	num_epoch
 	max_num_epoches
+	time_var
 	exit
 	# parameters for adaptive control policy
 	tau
@@ -19,6 +20,7 @@ type MasterState
 	examples_batch_size
 	# number of examples the worker processes to compute a gradient update
 	batch_size
+	gossip_time
 end
 
 ### INITIALIZATION ###
@@ -69,6 +71,9 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 		state.num_epoch = state.num_epoch + 1;
 	elseif state.num_processed_examples >= state.num_train_examples
 		# terminate execution
+		# BEHAVIOUR IS NOT CORRECT THOUGH - SHOULD WAIT FOR ALL WORKERS TO FINISH
+		# PROCESSING EXAMPLES THAT THEY ALREADY HAVE, SEND GRADIENT UPDATES TO PARAMSERVERS,
+		# ETC
 		state.exit = true;
 		return;
 	end
@@ -125,6 +130,7 @@ function master()
 	num_processed_examples = 0
 	num_epoch = 1
 	max_num_epoches = 1
+	time_var = now()
 	exit = false
 	
 	# parameters for adaptive control policy
@@ -135,17 +141,48 @@ function master()
 	examples_batch_size = 50
 	# number of examples the worker processes to compute a gradient update
 	batch_size = 10
+	gossip_time = 20.0
 	
 	#REMOVE LATER
 	num_train_examples = 1000;
 	#REMOVE LATER
 	flag = true;
 	
-	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, exit, tau, num_workers, num_paramservers, examples_batch_size, batch_size)
+	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
+	# I suggest running code like julia main.jl > debug.txt so you can search through output
+	
+	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, exit, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time)
 	initialize_nodes(state)
 	
 	while !state.exit
 		handle(state,take!(state.master_mailbox))
+		
+		# Check whether to initiate gossip
+		time_elapsed = Int(now() - state.time_var)
+		if num_paramservers > 1 && time_elapsed >= state.gossip_time * 1000
+			println("[MASTER] Initiating paramserver gossip")
+			
+			# randomly choose 2 distinct paramservers
+			
+			pserver1_index = rand(1:length(state.paramservers));
+			pserver1_id = state.paramservers[pserver1_index][1];
+			
+			# can do this because id is really stored in array
+			sample_wo_replacement_paramservers = copy(state.paramservers);
+			
+			sample_wo_replacement_paramservers = deleteat!(sample_wo_replacement_paramservers, pserver1_index);
+			
+			pserver2_index = rand(1:length(sample_wo_replacement_paramservers));
+			pserver2_id = sample_wo_replacement_paramservers[pserver2_index][1];
+			
+			# now dispatch the initiate gossip messages
+			println("[MASTER] Dispatching InitiateGossipMessages")
+			remotecall(handle, pserver1_id, InitiateGossipMessage(pserver2_id))
+			remotecall(handle, pserver2_id, InitiateGossipMessage(pserver1_id))
+			
+			state.time_var = now();
+		end
+		
 	end
 	
 end
@@ -163,6 +200,7 @@ function master(master_channel)
 	global num_paramservers
 	global examples_batch_size
 	global batch_size
+	global gossip_time
 	
 	while true
 		if isready(master_channel)
@@ -183,7 +221,7 @@ function master(master_channel)
 		boo = false;
 
 		if boo
-			msg = AdaptiveControlPolicyMessage(tau, num_workers, num_paramservers, example_batch_size, batch_size);
+			msg = AdaptiveControlPolicyMessage(tau, num_workers, num_paramservers, example_batch_size, batch_size, gossip_time);
 			for i = 1:length(workers)
 				worker_tup = workers[i];
 				worker_mailbox = worker_tup[3];
@@ -201,6 +239,7 @@ function adaptive_control_policy()
 	global num_paramservers
 	global examples_batch_size
 	global batch_size
+	global gossip_time
 	global flag
 
 	randy = RandomDevice();
