@@ -52,11 +52,22 @@ end
 function handle(message::InitiateGossipMessage)
 	global local_state
 	println("[PARAM SERVER] Initiating gossip")
-	remotecall(handle, message.pserver_id, ParameterGossipMessage(local_state.params));
+	remotecall(handle, message.pserver_id, ParameterGossipMessage(local_state.params, message.self_pserver_id));
 end
 
 function handle(message::ParameterGossipMessage)
 	global local_state
-	println("[PARAM SERVER] Performing gossip average")
-	local_state.params = gossip_average(local_state.params, message.parameters);
+	println("[PARAM SERVER] Paramserver has received ParameterGossipMessage")
+	varA = message.parameters
+	operand = half_subtract(varA, local_state.params)
+	# local_state.params is varB
+	local_state.params = add(local_state.params, operand)
+	remotecall(handle, message.pserver_id, ParameterFinalGossipMessage(operand))
+end
+
+function handle(message::ParameterFinalGossipMessage)
+	global local_state
+	println("[PARAM SERVER] Paramserver has received ParameterFinalGossipMessage")
+	# local_state.params is varA'
+	local_state.params = subtract(local_state.params, message.parameters)
 end

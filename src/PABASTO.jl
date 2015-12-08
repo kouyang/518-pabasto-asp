@@ -73,17 +73,28 @@ end
 
 type InitiateGossipMessage
 	# Master sends this to paramserver: here is the process id of the paramserver
-	# I want you to gossip with. The master should send this message to both members of
+	# I want you to gossip with. The master should send this message to one member of
 	# the pair of paramservers selected for gossiping.
 	# Every gossip_time seconds, the master randomly selects two paramservers for
 	# gossiping (asynchronous gossip)
-	# Upon arrival, paramserver sends ParameterGossipMessage to process id below
-	pserver_id::Int
+	# Upon arrival of this message, 1st paramserver sends ParameterGossipMessage to process id below
+	# corresponding to the 2nd paramserver with 1st paramserver parameters and 1st paramserver process id
+	pserver_id::Int # 2nd paramserver
+	self_pserver_id::Int # 1st paramserver
 end
 
 type ParameterGossipMessage
-	# When paramserver receives this message, it immediately performs gossip_average using
-	# the parameters below and its current parameters
+	# When 2nd paramserver receives this message, it immediately performs B + (0.5 * A - 0.5 * B) using
+	# the parameters below (A) and its current parameters (B). It then sends ParameterFinalGossipMessage
+	# to the 1st paramserver with pserver_id below. The ParameterFinalGossipMessage 
+	# has 0.5 * A + 0.5 * B - parameters field in this message
+	parameters::Parameter
+	pserver_id::Int
+end
+
+type ParameterFinalGossipMessage
+	# When 1st paramserver receives this message with parameters below being equal to
+	# 0.5 * A - 0.5 * B, it performs A' - (0.5 * A - 0.5 * B) = A' + (0.5 * B - 0.5 * A)
 	parameters::Parameter
 end
 

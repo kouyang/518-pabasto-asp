@@ -144,9 +144,9 @@ function master()
 	gossip_time = 20.0
 	
 	#REMOVE LATER
-	num_train_examples = 1000;
+	num_train_examples = 1000
 	#REMOVE LATER
-	flag = true;
+	flag = true
 	
 	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
 	# I suggest running code like julia main.jl > debug.txt so you can search through output
@@ -160,7 +160,6 @@ function master()
 		# Check whether to initiate gossip
 		time_elapsed = Int(now() - state.time_var)
 		if num_paramservers > 1 && time_elapsed >= state.gossip_time * 1000
-			println("[MASTER] Initiating paramserver gossip")
 			
 			# randomly choose 2 distinct paramservers
 			
@@ -177,8 +176,7 @@ function master()
 			
 			# now dispatch the initiate gossip messages
 			println("[MASTER] Dispatching InitiateGossipMessages")
-			remotecall(handle, pserver1_id, InitiateGossipMessage(pserver2_id))
-			remotecall(handle, pserver2_id, InitiateGossipMessage(pserver1_id))
+			remotecall(handle, pserver1_id, InitiateGossipMessage(pserver2_id, pserver1_id))
 			
 			state.time_var = now();
 		end

@@ -9,6 +9,18 @@ type SimpleGradient <: Gradient
 	data
 end
 
+function add(p1::SimpleParameter, p2::SimpleParameter)
+	return SimpleParameter(p1.data + p2.data)
+end
+
+function half_subtract(p1::SimpleParameter, p2::SimpleParameter)
+	return SimpleParameter(0.5 * p1.data - 0.5 * p2.data)
+end
+
+function subtract(p1::SimpleParameter, p2::SimpleParameter)
+	return SimpleParameter(p1.data - p2.data)
+end
+
 function gossip_average(p1::SimpleParameter, p2::SimpleParameter)
 	new_data = 0.5 * p1.data + 0.5 * p2.data;
 	return SimpleParameter(new_data)
