@@ -11,7 +11,6 @@ type MasterState
 	num_epoch
 	max_num_epoches
 	time_var
-	exit
 	# parameters for adaptive control policy
 	tau
 	num_workers
@@ -21,6 +20,9 @@ type MasterState
 	# number of examples the worker processes to compute a gradient update
 	batch_size
 	gossip_time
+	num_live_workers
+	params
+	num_processed_params
 end
 
 ### INITIALIZATION ###
@@ -54,30 +56,31 @@ function add_workers(state::MasterState, count)
 		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox)
 		push!(state.workers, (id, ref, worker_mailbox))
 	end
+	state.num_live_workers += count
 end
 
 function remove_worker(state::MasterState)
 	id, ref, worker_mailbox = pop!(state.workers)
 	put!(worker_mailbox, CeaseOperationMessage())
+	state.num_live_workers -= 1
 end
 
 ### REQUEST HANDLING ###
 
 # Handle request from workers for more examples
 function handle(state::MasterState,request::ExamplesRequestMessage)
-	
+
 	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.max_num_epoches
 		state.num_processed_examples = 0;
 		state.num_epoch = state.num_epoch + 1;
 	elseif state.num_processed_examples >= state.num_train_examples
-		# terminate execution
-		# BEHAVIOUR IS NOT CORRECT THOUGH - SHOULD WAIT FOR ALL WORKERS TO FINISH
-		# PROCESSING EXAMPLES THAT THEY ALREADY HAVE, SEND GRADIENT UPDATES TO PARAMSERVERS,
-		# ETC
-		state.exit = true;
+		# notify all workers to stop
+		for (id, ref, worker_mailbox) in state.workers
+			put!(worker_mailbox, FinishOperationMessage())
+		end
 		return;
 	end
-	
+
 	id = request.id
 	worker_mailbox = request.worker_mailbox
 
@@ -89,18 +92,14 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 		count = count + 1
 		state.num_processed_examples = state.num_processed_examples + 1
 	end
-	
-	
+
+
 	put!(worker_mailbox, ExampleIndicesMessage(examples))
-	
-	#=
-	if (isempty(examples))
-		println("[MASTER] Processed all examples")
-		return false
-	end
-	=#
-	
 	println("[MASTER] Assigned examples $(examples[1])-$(examples[end]) to worker $(id)")
+end
+
+function handle(state::MasterState,msg::FinishedOperationMessage)
+	state.num_live_workers -= 1
 end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
@@ -113,26 +112,37 @@ function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
 end
 
+function handle(state::MasterState,msg::ParameterUpdateMessage)
+	if state.params == nothing
+		state.params = msg.parameters
+	end
+
+	new_params = msg.parameters
+	operand = half_subtract(new_params, state.params)
+	state.params = add(state.params, operand)
+
+	state.num_processed_params += 1
+end
+
 function handle(state::MasterState,msg::Void)
 	println("[MASTER] Spinning")
 	sleep(1)
 end
 
 function master()
-	
+
 	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
-	
+
 	workers = Tuple{Int, Any, Any}[]
 	paramservers = Tuple{Int, Any}[]
-	
+
 	train_examples, train_labels = traindata()
 	num_train_examples = size(train_examples, 2)
 	num_processed_examples = 0
 	num_epoch = 1
 	max_num_epoches = 1
 	time_var = now()
-	exit = false
-	
+
 	# parameters for adaptive control policy
 	tau = 20.0
 	num_workers = 2
@@ -142,112 +152,62 @@ function master()
 	# number of examples the worker processes to compute a gradient update
 	batch_size = 10
 	gossip_time = 20.0
-	
+	num_live_workers = 0
+	params = nothing
+	num_processed_params = 0
+
 	#REMOVE LATER
 	num_train_examples = 10000;
 	#REMOVE LATER
 	flag = true
-	
+
 	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
 	# I suggest running code like julia main.jl > debug.txt so you can search through output
-	
-	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, exit, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time)
+
+	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time, num_live_workers, params, num_processed_params)
 	initialize_nodes(state)
-	
-	while !state.exit
+
+	while state.num_live_workers > 0
 		handle(state,take!(state.master_mailbox))
-		
+
 		# Check whether to initiate gossip
 		time_elapsed = Int(now() - state.time_var)
 		if num_paramservers > 1 && time_elapsed >= state.gossip_time * 1000
-			
+
 			# randomly choose 2 distinct paramservers
-			
+
 			pserver1_index = rand(1:length(state.paramservers));
 			pserver1_id = state.paramservers[pserver1_index][1];
-			
+
 			# can do this because id is really stored in array
 			sample_wo_replacement_paramservers = copy(state.paramservers);
-			
+
 			sample_wo_replacement_paramservers = deleteat!(sample_wo_replacement_paramservers, pserver1_index);
-			
+
 			pserver2_index = rand(1:length(sample_wo_replacement_paramservers));
 			pserver2_id = sample_wo_replacement_paramservers[pserver2_index][1];
-			
+
 			# now dispatch the initiate gossip messages
 			println("[MASTER] Dispatching InitiateGossipMessages")
 			remotecall(handle, pserver1_id, InitiateGossipMessage(pserver2_id, pserver1_id))
-			
+
 			state.time_var = now();
 		end
-		
+
 	end
-	
-end
 
-# COMMENTED OUT CODE - IGNORE
-#=
-# Handle cease operation message
-function handle_request(request::CeaseOperationMessage)
-	return false
-end
-
-function master(master_channel)
-	global tau
-	global num_workers
-	global num_paramservers
-	global examples_batch_size
-	global batch_size
-	global gossip_time
-	
-	while true
-		if isready(master_channel)
-			request = take!(master_channel)
-			if !handle_request(request)
-				return false
-			end
-		end
-
-		while isready(pserver_gradient_update_channel)
-			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_gradient_update_channel))
-		end
-		while isready(pserver_update_request_channel)
-			remotecall(handle,pserver_ids[rand(1:end)],take!(pserver_update_request_channel))
-		end
-
-		#boo = adaptive_control_policy();
-		boo = false;
-
-		if boo
-			msg = AdaptiveControlPolicyMessage(tau, num_workers, num_paramservers, example_batch_size, batch_size, gossip_time);
-			for i = 1:length(workers)
-				worker_tup = workers[i];
-				worker_mailbox = worker_tup[3];
-				put!(worker_mailbox, msg);
-			end
-			
-			println("[MASTER] Control Policy Messages Sent");
-		end
+	# query each paramserver for parameters
+	# (todo: doesn't quite work yet; paramservers need to spin)
+	for (id, pserver_mailbox) in paramservers
+		remotecall(handle, id, ParameterRequestMessage())
 	end
-end
 
-function adaptive_control_policy()
-	global tau
-	global num_workers
-	global num_paramservers
-	global examples_batch_size
-	global batch_size
-	global gossip_time
-	global flag
-
-	randy = RandomDevice();
-
-	if flag
-		tau = tau + 1.0;
-		flag = false;
-		return true;
-	else
-		return false;
+	while state.num_processed_params < num_paramservers
+		handle(state,take!(state.master_mailbox))
 	end
+
+	# write params to disk
+	f = open("params.out", "w")
+	write(f, state.params.data)
+	close(f)
 end
-=#

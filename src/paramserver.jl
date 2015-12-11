@@ -44,6 +44,11 @@ function paramserver()
 end
 =#
 
+function handle(message::ParameterRequestMessage)
+	global local_state
+	put!(local_state.master_mailbox, ParameterUpdateMessage(local_state.params))
+end
+
 function handle(message::ParameterUpdateRequestMessage)
 	global local_state
 	println("[PARAM SERVER] Reading params")

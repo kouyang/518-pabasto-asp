@@ -54,6 +54,9 @@ type ParameterUpdateMessage
 	parameters
 end
 
+type ParameterRequestMessage
+end
+
 type ExampleIndicesMessage
 	indices::Array{Int}
 end
@@ -64,6 +67,13 @@ type ExamplesRequestMessage
 end
 
 type CeaseOperationMessage
+end
+
+type FinishOperationMessage
+end
+
+type FinishedOperationMessage
+	id::Int
 end
 
 type AdaptiveControlPolicyMessage
@@ -90,7 +100,7 @@ end
 type ParameterGossipMessage
 	# When 2nd paramserver receives this message, it immediately performs B + (0.5 * A - 0.5 * B) using
 	# the parameters below (A) and its current parameters (B). It then sends ParameterFinalGossipMessage
-	# to the 1st paramserver with pserver_id below. The ParameterFinalGossipMessage 
+	# to the 1st paramserver with pserver_id below. The ParameterFinalGossipMessage
 	# has 0.5 * A + 0.5 * B - parameters field in this message
 	parameters::Parameter
 	pserver_id::Int
@@ -124,6 +134,9 @@ function priority(x::Type{ParameterUpdateMessage},queue_length)
 	return 10*queue_length
 end
 
+function priority(x::Type{FinishOperationMessage},queue_length)
+	return -1
+end
 
 
 # todo: split into separate modules
