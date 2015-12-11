@@ -1,5 +1,5 @@
 using AutoDiff
-
+#=
 x=Variable(2.0)
 y=Variable(4.0)
 
@@ -15,8 +15,8 @@ println(z)
 minimize(z)
 println("x: $(val(x))")
 println("y: $(val(y))")
+=#
 
-#=
 using MNIST
 using Images,ImageView
 
@@ -43,7 +43,7 @@ label=Call(getlabel,(digit,))
 weights1=Variable(0.01*randn((10,784)))
 biases1=Variable(0.01*randn((10,)))
 function prediction(digit)
-	layer1=rect_lin(weights1*digit.+biases1)
+	layer1=weights1*digit.+biases1
 	tmp=exp(layer1)
 	tmp./sum(tmp)
 end
@@ -54,10 +54,10 @@ begin #viewing
 		a/=maximum(a)
 		grayim(transpose(reshape(a,(28,28))))
 	end
-	#c = canvasgrid(4,5)
+	c = canvasgrid(4,5)
 	function updateview()
 		for i in 1:10
-			#view(c[i],f(val(weights1)[i,:]))
+			view(c[i],f(val(weights1)[i,:]))
 		end
 	end
 end
@@ -77,4 +77,3 @@ minimize(error,delta=0.0001,its=10000000,f=(it->begin
 end
 ))
 ProfileView.view()
-=#

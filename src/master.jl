@@ -95,7 +95,7 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 	end
 	=#
 	
-	println("[MASTER] Assigned examples $(examples) to worker $(id)")
+	println("[MASTER] Assigned examples $(examples[1])-$(examples[end]) to worker $(id)")
 end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
@@ -129,15 +129,15 @@ function master()
 	
 	# parameters for adaptive control policy
 	tau = 20.0
-	num_workers = 3
+	num_workers = 2
 	num_paramservers = 1
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
-	examples_batch_size = 50
+	examples_batch_size = 500
 	# number of examples the worker processes to compute a gradient update
 	batch_size = 10
 	
 	#REMOVE LATER
-	num_train_examples = 1000;
+	num_train_examples = 10000;
 	#REMOVE LATER
 	flag = true;
 	

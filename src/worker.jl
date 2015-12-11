@@ -7,12 +7,15 @@ type WorkerState
 	batch_size
 	time_var
 	param_request_pending::Bool
+	update_params
+	compute_gradient
+	learning_rate
 end
 
 include("gradient_computations.jl")
 
 function handle(state::WorkerState, message::ExampleIndicesMessage)
-	grad=compute_gradient(state.current_params, message.indices)
+	grad=compute_gradient(state, message.indices)
 	println("[WORKER] Sending gradient updates")
 	put!(state.master_mailbox, GradientUpdateMessage(grad))
 	
@@ -21,8 +24,8 @@ function handle(state::WorkerState, message::ExampleIndicesMessage)
 end
 
 function handle(state::WorkerState, message::ParameterUpdateMessage)
-	state.current_params = message.parameters;
-	state.time_var = now();
+	state.current_params.data = message.parameters.data
+	state.time_var = now()
 	state.param_request_pending=false
 	println("[WORKER] Worker has received and processed parameter value update")
 end
@@ -46,7 +49,10 @@ end
 function worker(id, master_mailbox, worker_mailbox)
 	println("[WORKER] initialized")
 
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 20.0, 10, now(), false)
+	#update_params and compute_gradient are functions which do the obvious
+	update_params,compute_grad=AutoDiff.derivative(error,Any[dummy_weights1,dummy_biases1], Any[dummy_input,dummy_output])
+
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 1.0, 10, now(), false, update_params, compute_grad,0.0003)
 	
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))

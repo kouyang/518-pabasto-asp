@@ -2,7 +2,7 @@ __precompile__()
 
 module AutoDiff
 using DataStructures
-export Variable, Call, CoTangent, Lift, val
+export Constant,Variable, Call, CoTangent, Lift, val
 export rect_lin,sigmoid,convolve
 export minimize
 
@@ -29,7 +29,12 @@ type Variable{T} <: CoTangent{T}
 	val::T
 	delta::T
 end
+type Constant{T} <: CoTangent{T}
+	val::T
+	delta::T
+end
 Variable{T}(val::T)=Variable{T}(val,my_zero(val))
+Constant{T}(val::T)=Constant{T}(val,my_zero(val))
 
 is_CoTangent(x::CoTangent)=true
 is_CoTangent(x)=false
@@ -92,26 +97,26 @@ function backprop end
 #and an array of constants
 function derivative(f, vars, constants)
 	wrapped_vars=map(x->Variable(x),vars)
-	A=f(wrapped_vars,constants)
-	output=f(wrapped_vars,constants)
+	wrapped_constants=map(x->Constant(x),constants)
+	output=f(wrapped_vars,wrapped_constants)
 	l=topological_order(output)
 	function update_params(new_params)
 		for (x,y) in zip(wrapped_vars,new_params)
 			x.val=y
 		end
 	end
-	function accumulate_gradient(constants)
+	function gradient(constants)
+		map(reset_delta,l)
+		for (x,y) in zip(wrapped_constants,constants)
+			x.val=y
+		end
+		map(execute,l)
 		output.delta=1
 		map(backprop,reverse(l))
 		return map(x->x.delta,wrapped_vars)
 	end
-	function take_gradient()
-		t=map(x->x.delta,wrapped_vars)
-		map(reset_delta,l)
-		return t
-	end
 
-	return (update_params,accumulate_gradient,take_gradient)
+	return (update_params,gradient)
 end
 
 function compute_grad(expr,l)
@@ -120,10 +125,10 @@ function compute_grad(expr,l)
 	map(backprop,reverse(l))
 end
 begin
-	function descend(d::Variable,delta,momentum)
+	function descend(d::Variable,delta)
 		d.val -= delta.*d.delta
 	end
-	function descend(d::CoTangent,delta,momentum) end
+	function descend(d::CoTangent,delta) end
 end
 function minimize(c::CoTangent;delta=0.01,its=1000,f=(it->nothing))
 	l=topological_order(c)

@@ -7,6 +7,7 @@ macro prop(x,y)
 end
 
 function backprop(x::Variable) end
+function backprop(x::Constant) end
 function backprop(c::Call) 
 	backprop_dispatch(c,c.args...)
 end

@@ -20,12 +20,14 @@ end
 function take!(m::Mailbox)
 	n=length(values(m.data))
 	#iterate through channels in a random order
-	for c in collect(values(m.data))[randperm(n)]
-		if isready(c)
-			return take!(c)
-		end
+	all_channels=filter(x->isready(x[2]),collect(m.data))
+	if length(all_channels)>0
+		priorities=map(x->priority(x[1],length(x[2].data)),all_channels)
+		mtype,c=all_channels[indmax(priorities)]
+		return take!(c)
+	else
+		return nothing
 	end
-	return nothing
 end
 
 
@@ -37,6 +39,8 @@ end
 
 type ConcreteGradient <: Gradient
 end
+
+### Messages ###
 
 type GradientUpdateMessage
 	gradient::Gradient
@@ -77,6 +81,22 @@ end
 function add_procs(count)
 	return fetch(@spawnat 1 Main.add_pabasto_procs(count))
 end
+
+##Priorities##
+#The default priority of a message type is just the number
+#of messages of that type
+
+#To define priority of a new type, follow the example of
+#ParameterUpdateMessage
+function priority(message_type,queue_length)
+	return queue_length
+end
+
+function priority(x::Type{ParameterUpdateMessage},queue_length)
+	return 10*queue_length
+end
+
+
 
 # todo: split into separate modules
 include("master.jl")
