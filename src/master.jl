@@ -207,7 +207,7 @@ function master()
 	end
 
 	# write params to disk
-	f = open("params.out", "w")
-	write(f, state.params.data)
+	f = open("params.jls", "w")
+	serialize(f, state.params.data)
 	close(f)
 end
