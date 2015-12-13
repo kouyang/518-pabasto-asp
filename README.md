@@ -1,3 +1,5 @@
+This branch has the parameters adjusted for a demo in class. It is meant to show off regular functionality.
+
 #PABASTO-ASP
 
 ##Setup

@@ -140,13 +140,13 @@ function master()
 	num_train_examples = size(train_examples, 2)
 	num_processed_examples = 0
 	num_epoch = 1
-	max_num_epoches = 1
+	max_num_epoches = 100
 	time_var = now()
 
 	# parameters for adaptive control policy
 	tau = 20.0
-	num_workers = 2
-	num_paramservers = 1
+	num_workers = 4
+	num_paramservers = 2
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	examples_batch_size = 500
 	# number of examples the worker processes to compute a gradient update
@@ -157,7 +157,7 @@ function master()
 	num_processed_params = 0
 
 	#REMOVE LATER
-	num_train_examples = 10000;
+	num_train_examples = 60000;
 	#REMOVE LATER
 	flag = true
 

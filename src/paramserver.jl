@@ -1,6 +1,6 @@
 ### Param Server State ###
 
-const DISPLAY_FILTERS=false
+const DISPLAY_FILTERS=true
 
 if DISPLAY_FILTERS
 	using Images, ImageView
