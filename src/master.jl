@@ -144,8 +144,8 @@ function master(master_mailbox)
 	train_examples, train_labels = traindata()
 	num_train_examples = size(train_examples, 2)
 	num_processed_examples = 0
-	num_epoch = 100
-	max_num_epoches = 1
+	num_epoch = 1
+	max_num_epoches = 100
 	time_var = now()
 
 	# parameters for adaptive control policy
@@ -156,7 +156,7 @@ function master(master_mailbox)
 	examples_batch_size = 500
 	# number of examples the worker processes to compute a gradient update
 	batch_size = 10
-	gossip_time = 20.0
+	gossip_time = 2.0
 	num_live_workers = 0
 	params = nothing
 	num_processed_params = 0
@@ -177,7 +177,7 @@ function master(master_mailbox)
 
 		# Check whether to initiate gossip
 		time_elapsed = Int(now() - state.time_var)
-		if num_paramservers > 1 && time_elapsed >= state.gossip_time * 1000
+		if length(state.paramservers) > 1 && time_elapsed >= state.gossip_time * 1000
 
 			# randomly choose 2 distinct paramservers
 
@@ -207,7 +207,7 @@ function master(master_mailbox)
 		remotecall(handle, id, ParameterRequestMessage())
 	end
 
-	while state.num_processed_params < num_paramservers
+	while state.num_processed_params < length(state.paramservers)
 		handle(state,take!(state.master_mailbox))
 	end
 
