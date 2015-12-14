@@ -124,22 +124,27 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 	state.num_processed_params += 1
 end
 
+function handle(state::MasterState,msg::AddParameterServerMessage)
+	add_paramservers(state, msg.count)
+end
+
 function handle(state::MasterState,msg::Void)
 	println("[MASTER] Spinning")
 	sleep(1)
 end
 
-function master()
+function master_mailbox()
+	return RemoteChannel(() -> PABASTO.Mailbox(), 1)
+end
 
-	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
-
+function master(master_mailbox)
 	workers = Tuple{Int, Any, Any}[]
 	paramservers = Tuple{Int, Any}[]
 
 	train_examples, train_labels = traindata()
 	num_train_examples = size(train_examples, 2)
 	num_processed_examples = 0
-	num_epoch = 1
+	num_epoch = 100
 	max_num_epoches = 1
 	time_var = now()
 
@@ -157,7 +162,7 @@ function master()
 	num_processed_params = 0
 
 	#REMOVE LATER
-	num_train_examples = 10000;
+	num_train_examples = 60000;
 	#REMOVE LATER
 	flag = true
 

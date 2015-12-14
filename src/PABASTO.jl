@@ -112,6 +112,10 @@ type ParameterFinalGossipMessage
 	parameters::Parameter
 end
 
+type AddParameterServerMessage
+	count::Int
+end
+
 function update(p::Parameter, g::Gradient)
 	# update p with parameter g
 end
@@ -137,7 +141,6 @@ end
 function priority(x::Type{FinishOperationMessage},queue_length)
 	return -1
 end
-
 
 # todo: split into separate modules
 include("master.jl")

@@ -4,6 +4,11 @@ function add_pabasto_procs(count)
 		remotecall_fetch(()->eval(Main, quote
 			if myid() != 1
 				redirect_stderr(open("$(myid()).err", "w"))
+				redirect_stdout(open("$(myid()).out", "w"))
+				function Base.print(x::String)
+					print(STDOUT, x)
+					flush(STDOUT)
+				end
 			end
 			using PABASTO
 		end), id)
@@ -14,4 +19,5 @@ end
 using PABASTO
 
 master_id = add_pabasto_procs(1)[1]
-fetch(@spawnat master_id PABASTO.master())
+master_mailbox = fetch(@spawnat master_id PABASTO.master_mailbox())
+@spawnat master_id PABASTO.master(master_mailbox)
