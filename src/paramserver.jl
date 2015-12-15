@@ -11,12 +11,20 @@ type ParamServerState
 	pserver_mailbox
 end
 
-local_state = nothing
+#local_state = nothing
 
 function paramserver_setup(master_mailbox, pserver_mailbox)
 	global local_state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,pserver_mailbox)
 	if DISPLAY_FILTERS
 		global c = canvasgrid(4,5)
+	end
+end
+
+function paramserver(master_mailbox,pserver_mailbox)
+	state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,pserver_mailbox)
+
+	while true
+		handle(state,take!(state.pserver_mailbox))
 	end
 end
 
@@ -44,15 +52,14 @@ function paramserver()
 end
 =#
 
-function handle(message::ParameterRequestMessage)
+function handle(state, message::ParameterRequestMessage)
 	global local_state
 	put!(local_state.master_mailbox, ParameterUpdateMessage(local_state.params))
 end
 
-function handle(message::ParameterUpdateRequestMessage)
-	global local_state
+function handle(state, message::ParameterUpdateRequestMessage)
 	println("[PARAM SERVER] Reading params")
-	put!(message.worker_mailbox,ParameterUpdateMessage(local_state.params))
+	put!(message.worker_mailbox,ParameterUpdateMessage(state.params))
 end
 
 function updateview()
@@ -73,7 +80,7 @@ function handle(message::GradientUpdateMessage)
 		updateview()
 	end
 end
-
+#=
 function handle(message::InitiateGossipMessage)
 	global local_state
 	println("[PARAM SERVER] Initiating gossip")
@@ -96,3 +103,4 @@ function handle(message::ParameterFinalGossipMessage)
 	# local_state.params is varA'
 	local_state.params = subtract(local_state.params, message.parameters)
 end
+=#
