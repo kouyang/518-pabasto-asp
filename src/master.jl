@@ -146,7 +146,7 @@ function master()
 	# parameters for adaptive control policy
 	tau = 20.0
 	num_workers = 4
-	num_paramservers = 2
+	num_paramservers = 1
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	examples_batch_size = 500
 	# number of examples the worker processes to compute a gradient update
