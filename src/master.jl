@@ -17,10 +17,10 @@ type MasterState
 	num_paramservers
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	examples_batch_size
-	# number of examples the worker processes to compute a gradient update
-	batch_size
 	gossip_time
+	# not parameters for adaptive control policy
 	num_live_workers
+	num_live_pservers
 	params
 	num_processed_params
 end
@@ -34,19 +34,17 @@ end
 
 function add_paramservers(state::MasterState, count)
 	ids = add_procs(count)
-	# todo: remove wait
 	for id in ids
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox)
-		push!(state.paramservers, (id, pserver_mailbox))
+		ref = @spawnat id PABASTO.paramserver(id, state.master_mailbox, pserver_mailbox)
+		push!(state.paramservers, (id, ref, pserver_mailbox))
 	end
+	state.num_live_pservers += count
 end
 
 function remove_paramserver(state::MasterState)
-	#=
-	id, pserver_mailbox = pop!(state.paramservers)
+	id, ref, pserver_mailbox = pop!(state.paramservers)
 	put!(pserver_mailbox, CeaseOperationMessage())
-	=#
 end
 
 function add_workers(state::MasterState, count)
@@ -61,8 +59,7 @@ end
 
 function remove_worker(state::MasterState)
 	id, ref, worker_mailbox = pop!(state.workers)
-	put!(worker_mailbox, CeaseOperationMessage())
-	state.num_live_workers -= 1
+	put!(worker_mailbox, FinishOperationMessage())
 end
 
 ### REQUEST HANDLING ###
@@ -78,7 +75,7 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 		for (id, ref, worker_mailbox) in state.workers
 			put!(worker_mailbox, FinishOperationMessage())
 		end
-		return;
+		return
 	end
 
 	id = request.id
@@ -102,14 +99,18 @@ function handle(state::MasterState,msg::FinishedOperationMessage)
 	state.num_live_workers -= 1
 end
 
+function handle(state::MasterState,msg::CeasedOperationMessage)
+	state.num_live_pservers -= 1
+end
+
 function handle(state::MasterState,msg::GradientUpdateMessage)
 	println("[MASTER] Dispatching GradientUpdateMessage")
-	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
+	put!(state.paramservers[rand(1:end)][3], msg)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 	println("[MASTER] Dispatching ParameterUpdateRequestMessage")
-	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
+	put!(state.paramservers[rand(1:end)][3], msg)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateMessage)
@@ -122,6 +123,7 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 	state.params = add(state.params, operand)
 
 	state.num_processed_params += 1
+	
 end
 
 function handle(state::MasterState,msg::Void)
@@ -134,7 +136,7 @@ function master()
 	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
 
 	workers = Tuple{Int, Any, Any}[]
-	paramservers = Tuple{Int, Any}[]
+	paramservers = Tuple{Int, Any, Any}[]
 
 	train_examples, train_labels = traindata()
 	num_train_examples = size(train_examples, 2)
@@ -149,10 +151,9 @@ function master()
 	num_paramservers = 1
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	examples_batch_size = 500
-	# number of examples the worker processes to compute a gradient update
-	batch_size = 10
 	gossip_time = 20.0
 	num_live_workers = 0
+	num_live_pservers = 0
 	params = nothing
 	num_processed_params = 0
 
@@ -164,48 +165,55 @@ function master()
 	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
 	# I suggest running code like julia main.jl > debug.txt so you can search through output
 
-	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time, num_live_workers, params, num_processed_params)
+	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, gossip_time, num_live_workers, num_live_pservers, params, num_processed_params)
 	initialize_nodes(state)
-
+	
 	while state.num_live_workers > 0
 		handle(state,take!(state.master_mailbox))
 
 		# Check whether to initiate gossip
 		time_elapsed = Int(now() - state.time_var)
-		if num_paramservers > 1 && time_elapsed >= state.gossip_time * 1000
+		if state.num_live_pservers > 1 && time_elapsed >= state.gossip_time * 1000
 
 			# randomly choose 2 distinct paramservers
 
-			pserver1_index = rand(1:length(state.paramservers));
-			pserver1_id = state.paramservers[pserver1_index][1];
-
+			pserver1_index = rand(1:length(state.paramservers))
+			pserver1_mailbox = state.paramservers[pserver1_index][3]
+			
 			# can do this because id is really stored in array
-			sample_wo_replacement_paramservers = copy(state.paramservers);
+			sample_wo_replacement_paramservers = copy(state.paramservers)
 
-			sample_wo_replacement_paramservers = deleteat!(sample_wo_replacement_paramservers, pserver1_index);
+			sample_wo_replacement_paramservers = deleteat!(sample_wo_replacement_paramservers, pserver1_index)
 
-			pserver2_index = rand(1:length(sample_wo_replacement_paramservers));
-			pserver2_id = sample_wo_replacement_paramservers[pserver2_index][1];
-
+			pserver2_index = rand(1:length(sample_wo_replacement_paramservers))
+			pserver2_mailbox = sample_wo_replacement_paramservers[pserver2_index][3]
+			
 			# now dispatch the initiate gossip messages
-			println("[MASTER] Dispatching InitiateGossipMessages")
-			remotecall(handle, pserver1_id, InitiateGossipMessage(pserver2_id, pserver1_id))
-
-			state.time_var = now();
+			println("[MASTER] Dispatching InitiateGossipMessage")
+			
+			put!(pserver1_mailbox, InitiateGossipMessage(pserver2_mailbox))
+			
+			state.time_var = now()
 		end
 
 	end
 
+	state.num_paramservers = state.num_live_pservers
+	
 	# query each paramserver for parameters
-	# (todo: doesn't quite work yet; paramservers need to spin)
-	for (id, pserver_mailbox) in paramservers
-		remotecall(handle, id, ParameterRequestMessage())
+	for (id, ref, pserver_mailbox) in state.paramservers
+		put!(pserver_mailbox, ParameterRequestMessage())
 	end
-
-	while state.num_processed_params < num_paramservers
+	
+	while state.num_processed_params < state.num_paramservers
 		handle(state,take!(state.master_mailbox))
 	end
-
+	
+	# all paramservers have sent parameters so shut them all down
+	for(id, ref, pserver_mailbox) in state.paramservers
+		put!(pserver_mailbox, CeaseOperationMessage())
+	end
+	
 	# write params to disk
 	f = open("params.jls", "w")
 	serialize(f, state.params.data)

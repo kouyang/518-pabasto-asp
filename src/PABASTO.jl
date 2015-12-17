@@ -69,6 +69,10 @@ end
 type CeaseOperationMessage
 end
 
+type CeasedOperationMessage
+	id::Int
+end
+
 type FinishOperationMessage
 end
 
@@ -81,7 +85,6 @@ type AdaptiveControlPolicyMessage
 	num_workers::Int
 	num_paramservers::Int
 	example_batch_size::Int
-	batch_size::Int
 	gossip_time::Float64
 end
 
@@ -91,19 +94,18 @@ type InitiateGossipMessage
 	# the pair of paramservers selected for gossiping.
 	# Every gossip_time seconds, the master randomly selects two paramservers for
 	# gossiping (asynchronous gossip)
-	# Upon arrival of this message, 1st paramserver sends ParameterGossipMessage to process id below
-	# corresponding to the 2nd paramserver with 1st paramserver parameters and 1st paramserver process id
-	pserver_id::Int # 2nd paramserver
-	self_pserver_id::Int # 1st paramserver
+	# Upon arrival of this message, 1st paramserver sends ParameterGossipMessage to mailbox below
+	# corresponding to the 2nd paramserver with 1st paramserver parameters
+	pserver_mailbox::RemoteChannel # 2nd paramserver
 end
 
 type ParameterGossipMessage
 	# When 2nd paramserver receives this message, it immediately performs B + (0.5 * A - 0.5 * B) using
 	# the parameters below (A) and its current parameters (B). It then sends ParameterFinalGossipMessage
-	# to the 1st paramserver with pserver_id below. The ParameterFinalGossipMessage
+	# to the 1st paramserver with pserver_mailbox below. The ParameterFinalGossipMessage
 	# has 0.5 * A + 0.5 * B - parameters field in this message
 	parameters::Parameter
-	pserver_id::Int
+	pserver_mailbox::RemoteChannel
 end
 
 type ParameterFinalGossipMessage

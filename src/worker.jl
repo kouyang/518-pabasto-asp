@@ -4,7 +4,6 @@ type WorkerState
 	master_mailbox
 	worker_mailbox
 	tau
-	batch_size
 	time_var
 	param_request_pending::Bool
 	update_params
@@ -32,7 +31,6 @@ function handle(state::WorkerState, message::ParameterUpdateMessage)
 end
 
 function handle(state::WorkerState, msg::AdaptiveControlPolicyMessage)
-	state.batch_size = msg.batch_size;
 	state.tau = msg.tau;
 	println("[WORKER] Worker has received and processed control policy message")
 end
@@ -41,12 +39,12 @@ function handle(state::WorkerState, msg::FinishOperationMessage)
 	state.exit = true
 end
 
-function handle(s::WorkerState,state::Void)
+function handle(state::WorkerState, msg::Void)
 	println("[WORKER] Spinning")
 	sleep(1)
 end
 
-function handle{T}(s, state::T)
+function handle{T}(state::WorkerState, msg::T)
 	println("Handler not defined for $(T)")
 end
 
@@ -57,14 +55,15 @@ function worker(id, master_mailbox, worker_mailbox)
 	#update_params and compute_gradient are functions which do the obvious
 	update_params,compute_grad=AutoDiff.derivative(error,Any[dummy_weights1,dummy_biases1], Any[dummy_input,dummy_output])
 
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 1.0, 10, now(), false, update_params, compute_grad,0.0003, false)
+	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 1.0, now(), false, update_params, compute_grad, 0.0003, false)
 
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
+	
 	while !state.exit
-		handle(state,take!(state.worker_mailbox))
+		handle(state, take!(state.worker_mailbox))
 
 		#Stale Parameter Checks
 		time_elapsed = Int(now() - state.time_var)
