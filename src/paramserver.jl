@@ -94,7 +94,7 @@ function f(x)
 end
 function handle(state::ParamServerState,message::GradientUpdateMessage)
 	println("[PARAM SERVER] Writing params")
-	update(state.params, message.gradient)
+	update(state.params, fetch(message.gradient))
 	state.n_accumulated_gradients+=1
 	if DISPLAY_FILTERS
 		updateview()

@@ -85,7 +85,11 @@ end
 ### Messages ###
 
 type GradientUpdateMessage
-	gradient::Gradient
+	gradient::Future
+end
+
+function GradientUpdateMessage(gradient::Gradient)
+	GradientUpdateMessage(@spawnat myid() gradient)
 end
 
 type ParameterUpdateRequestMessage
