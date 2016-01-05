@@ -8,53 +8,73 @@ end
 type ParamServerState
 	params
 	master_mailbox
+	shared_pserver_mailbox
 	pserver_mailbox
+	accumulated_gradients
+	n_accumulated_gradients
+	index::Int
+	time_var
+	param_request_pending::Bool
+	tau
 end
 
 #local_state = nothing
-
+#=
 function paramserver_setup(master_mailbox, pserver_mailbox)
 	global local_state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,pserver_mailbox)
 	if DISPLAY_FILTERS
 		global c = canvasgrid(4,5)
 	end
 end
+=#
 
-function paramserver(master_mailbox,pserver_mailbox)
-	state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,pserver_mailbox)
+function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index)
+	state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,shared_pserver_mailbox,pserver_mailbox, SimpleGradient(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), 0,index,now(),false,5)
+	println("[PARAM SERVER] initialized")
 
 	while true
-		handle(state,take!(state.pserver_mailbox))
+		msg=take!(state.pserver_mailbox)
+		if msg==nothing
+			msg=take!(state.shared_pserver_mailbox,state.index)
+		end
+		#handle(state,take!(state.pserver_mailbox))
+		handle(state,msg)
+		if state.index>=2
+			low=max(state.index/4,1)
+			high=min(state.index/2,state.index-1)
+			@assert high >= low
+			if state.n_accumulated_gradients > 2
+				println("[PARAM SERVER] Pushing gradients")
+				put!(state.shared_pserver_mailbox,GradientUpdateMessage(state.accumulated_gradients),low,high)
+				state.accumulated_gradients.data*=0
+				state.n_accumulated_gradients=0
+			end
+			time_elapsed = Int(now() - state.time_var)
+			if time_elapsed >= state.tau * 1000 && !state.param_request_pending
+				println("[PARAM SERVER] Requesting parameter value updates")
+				println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
+				put!(state.shared_pserver_mailbox, ParameterUpdateRequestMessage(state.pserver_mailbox),low,high);
+				state.param_request_pending = true;
+			end
+		end
 	end
 end
 
-#Need to decide if paramservers will spin
+function handle(state:: ParamServerState, message::Void)
+	#println("[PARAM SERVER] Spinning")
+	#sleep(0.01)
+end
 #=
-function paramserver()
-	while true
-		if isready(master_mailbox) # wrong
-			msg = take!(state.master_mailbox)
-			if typeof(msg) == CeaseOperationMessage
-				println("[PARAM SERVER] Param server $(id) is shutting down")
-				return
-			end
-		end
-
-		output1 = remotecall_fetch(get_pserver_gradient_update_channel, 1)
-		output2 = remotecall_fetch(get_pserver_update_request_channel, 1)
-
-		if output2 != nothing
-			worker_mailbox = output2.worker_mailbox;
-			put!(worker_mailbox, SendParameterUpdateMessage(SimpleParameter()))
-			println("[PARAM SERVER] Parameter update message has been sent to worker")
-		end
-	end
+function handle(state, message::ParameterRequestMessage)
+	#put!(state.master_mailbox, ParameterUpdateMessage(state.params))
 end
 =#
 
-function handle(state, message::ParameterRequestMessage)
-	global local_state
-	put!(local_state.master_mailbox, ParameterUpdateMessage(local_state.params))
+function handle(state::ParamServerState, message::ParameterUpdateMessage)
+	state.params.data = message.parameters.data
+	state.time_var = now()
+	state.param_request_pending=false
+	println("[PARAM SERVER] Param server has received and processed parameter value update")
 end
 
 function handle(state, message::ParameterUpdateRequestMessage)
@@ -72,10 +92,10 @@ function f(x)
 	a/=maximum(a)
 	grayim(transpose(reshape(a,(28,28))))
 end
-function handle(message::GradientUpdateMessage)
-	global local_state
+function handle(state::ParamServerState,message::GradientUpdateMessage)
 	println("[PARAM SERVER] Writing params")
-	update(local_state.params, message.gradient)
+	update(state.params, message.gradient)
+	state.n_accumulated_gradients+=1
 	if DISPLAY_FILTERS
 		updateview()
 	end

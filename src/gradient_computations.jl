@@ -75,6 +75,6 @@ function compute_gradient(state::WorkerState,dataset)
 		label=map(x->if x==trainlabel(i); 1.0; else 0.0; end, 0:9)
 		g+=state.compute_gradient((example,label))
 	end
-	sleep(0.5)
+	sleep(0.1)
 	return SimpleGradient(state.learning_rate*g/length(dataset))
 end

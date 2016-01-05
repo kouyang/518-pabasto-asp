@@ -3,7 +3,8 @@ function add_pabasto_procs(count)
 	for id in ids
 		remotecall_fetch(()->eval(Main, quote
 			if myid() != 1
-				redirect_stderr(open("$(myid()).err", "w"))
+				#redirect_stderr(open("$(myid()).err", "w"))
+				#redirect_stdout(open("$(myid()).out", "w"))
 			end
 			using PABASTO
 		end), id)

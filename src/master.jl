@@ -4,6 +4,7 @@ using MNIST
 
 type MasterState
 	master_mailbox
+	shared_pserver_mailbox
 	paramservers
 	workers
 	num_train_examples
@@ -36,8 +37,11 @@ function add_paramservers(state::MasterState, count)
 	ids = add_procs(count)
 	# todo: remove wait
 	for id in ids
+		index=length(state.paramservers)+1
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox)
+		#remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox,index)
+		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index)
+		@async wait(ref)
 		push!(state.paramservers, (id, pserver_mailbox))
 	end
 end
@@ -54,6 +58,7 @@ function add_workers(state::MasterState, count)
 	for id in ids
 		worker_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
 		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox)
+		@async wait(ref)
 		push!(state.workers, (id, ref, worker_mailbox))
 	end
 	state.num_live_workers += count
@@ -104,12 +109,13 @@ end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
 	println("[MASTER] Dispatching GradientUpdateMessage")
-	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
+	#any paramserver between 1 and 10000 can handle the gradinet update message
+	put!(state.shared_pserver_mailbox,msg,1,10000)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 	println("[MASTER] Dispatching ParameterUpdateRequestMessage")
-	remotecall(handle,state.paramservers[rand(1:end)][1],msg)
+	put!(state.shared_pserver_mailbox,msg,1,10000)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateMessage)
@@ -132,6 +138,7 @@ end
 function master()
 
 	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
+	shared_pserver_mailbox = RemoteChannel(() -> PABASTO.IntervalMailbox(), 1)
 
 	workers = Tuple{Int, Any, Any}[]
 	paramservers = Tuple{Int, Any}[]
@@ -140,15 +147,15 @@ function master()
 	num_train_examples = size(train_examples, 2)
 	num_processed_examples = 0
 	num_epoch = 1
-	max_num_epoches = 1
+	max_num_epoches = 100
 	time_var = now()
 
 	# parameters for adaptive control policy
 	tau = 20.0
-	num_workers = 2
-	num_paramservers = 1
+	num_workers = 8
+	num_paramservers = 8
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
-	examples_batch_size = 500
+	examples_batch_size = 100
 	# number of examples the worker processes to compute a gradient update
 	batch_size = 10
 	gossip_time = 20.0
@@ -164,7 +171,7 @@ function master()
 	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
 	# I suggest running code like julia main.jl > debug.txt so you can search through output
 
-	state = MasterState(master_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time, num_live_workers, params, num_processed_params)
+	state = MasterState(master_mailbox, shared_pserver_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time, num_live_workers, params, num_processed_params)
 	initialize_nodes(state)
 
 	while state.num_live_workers > 0
