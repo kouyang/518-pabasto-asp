@@ -33,11 +33,9 @@ function take!(m::IntervalMailbox,position)
 		if i.index!=0
 			leafnode=i.node
 			interval=leafnode.entries.data[i.index]
-			println(channel.n)
 			c=channel.n
 			IntervalTrees.deletefirst!(channel,Interval{Real}(interval.first,interval.last))
 			@assert channel.n==c-1
-			println(channel.n)
 			unlock(m.lock)
 			return interval.value
 		end
@@ -88,11 +86,6 @@ end
 
 type GradientUpdateMessage
 	gradient::Gradient
-	id::Int #id=-1 means a worker submitted this gradient update
-	#id>0 is the id of the paramserver that submitted this update
-end
-function GradientUpdateMessage(gradient::Gradient)
-	return GradientUpdateMessage(gradient,-1)
 end
 
 type ParameterUpdateRequestMessage
