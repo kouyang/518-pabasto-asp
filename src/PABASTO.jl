@@ -1,6 +1,49 @@
 module PABASTO
 ### Mailboxes ###
 import Base: put!, wait, isready, take!, fetch
+using IntervalTrees
+using Parameters
+
+
+type IntervalMailbox <: AbstractChannel
+	data::Dict
+	lock::ReentrantLock
+	function IntervalMailbox()
+		new(Dict(),ReentrantLock())
+	end
+end
+
+function put!{T}(m::IntervalMailbox,v::T,low::Real,high::Real)
+	lock(m.lock)
+	if !haskey(m.data,T)
+		m.data[T]=IntervalMap{Real,T}()
+	end
+	push!(m.data[T],IntervalValue{Real,T}(low,high,v))
+	unlock(m.lock)
+	return m
+end
+
+function take!(m::IntervalMailbox,position)
+	lock(m.lock)
+	n=length(values(m.data))
+	all_channels=shuffle(collect(m.data))
+	for (T,channel) in all_channels
+		i=IntervalTrees.firstintersection(channel,Interval{Real}(position-0.1,position+0.1))
+
+		if i.index!=0
+			leafnode=i.node
+			interval=leafnode.entries.data[i.index]
+			c=channel.n
+			IntervalTrees.deletefirst!(channel,Interval{Real}(interval.first,interval.last))
+			@assert channel.n==c-1
+			unlock(m.lock)
+			return interval.value
+		end
+	end
+	unlock(m.lock)
+	return nothing
+end
+
 
 type Mailbox <: AbstractChannel
 	data::Dict
@@ -19,7 +62,6 @@ end
 
 function take!(m::Mailbox)
 	n=length(values(m.data))
-	#iterate through channels in a random order
 	all_channels=filter(x->isready(x[2]),collect(m.data))
 	if length(all_channels)>0
 		priorities=map(x->priority(x[1],length(x[2].data)),all_channels)
@@ -43,7 +85,11 @@ end
 ### Messages ###
 
 type GradientUpdateMessage
-	gradient::Gradient
+	gradient::Future
+end
+
+function GradientUpdateMessage(gradient::Gradient)
+	GradientUpdateMessage(@spawnat myid() gradient)
 end
 
 type ParameterUpdateRequestMessage
