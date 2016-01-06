@@ -21,7 +21,7 @@ end
 
 #Replace error with an arbitrary function to minimize
 #datum should be a tuple (digit,label) where label is length 10 array with a single 1
-function error(params::Array,datum)
+function loss(params::Array,datum)
 	weights1=params[1]
 	biases1=params[2]
 
@@ -32,8 +32,8 @@ function error(params::Array,datum)
 	error=sum((prediction-datum[2]).^2)
 end
 
-function error(params::SimpleParameter, datum)
-	error(params.data,datum)
+function loss(params::SimpleParameter, datum)
+	loss(params.data,datum)
 end
 srand(1)
 #Dummy inputs used for initializing variables in the gradient computation

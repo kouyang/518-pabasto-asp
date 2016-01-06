@@ -2,28 +2,27 @@ using MNIST
 
 ### TYPE DEFINITION ###
 
-type MasterState
-	master_mailbox
-	shared_pserver_mailbox
-	paramservers
-	workers
+@with_kw type MasterState
+	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), myid())
+	shared_pserver_mailbox = RemoteChannel(() -> PABASTO.IntervalMailbox(), myid())
+	workers::Array = Tuple{Int, Any, Any}[]
+	paramservers::Array = Tuple{Int, Any}[]
 	num_train_examples
-	num_processed_examples
-	num_epoch
-	max_num_epoches
-	time_var
+	num_processed_examples=0
+	num_epoch=1
+	max_num_epochs
+	time_var=now()
 	# parameters for adaptive control policy
 	tau
+
 	num_workers
 	num_paramservers
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	examples_batch_size
-	gossip_time
-	# not parameters for adaptive control policy
-	num_live_workers
-	num_live_pservers
-	params
-	num_processed_params
+	num_live_workers=0
+	num_live_pservers=0
+	params=nothing
+	num_processed_params=0
 end
 
 ### INITIALIZATION ###
@@ -72,7 +71,7 @@ end
 # Handle request from workers for more examples
 function handle(state::MasterState,request::ExamplesRequestMessage)
 
-	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.max_num_epoches
+	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.max_num_epochs
 		state.num_processed_examples = 0;
 		state.num_epoch = state.num_epoch + 1;
 	elseif state.num_processed_examples >= state.num_train_examples
@@ -138,43 +137,16 @@ function handle(state::MasterState,msg::Void)
 end
 
 function master()
-
-	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), 1)
-	shared_pserver_mailbox = RemoteChannel(() -> PABASTO.IntervalMailbox(), 1)
-
-	workers = Tuple{Int, Any, Any}[]
-	paramservers = Tuple{Int, Any}[]
-
 	train_examples, train_labels = traindata()
-	num_train_examples = size(train_examples, 2)
-	num_processed_examples = 0
-	num_epoch = 1
-	max_num_epoches = 100
-	time_var = now()
 
-	# parameters for adaptive control policy
-	tau = 20.0
-	num_workers = 8
-	num_paramservers = 8
-	# number of examples the master sends to worker in response to ExamplesRequestMessage
-	examples_batch_size = 100
-	# number of examples the worker processes to compute a gradient update
-	batch_size = 10
-	gossip_time = 20.0
-	num_live_workers = 0
-	num_live_pservers = 0
-	params = nothing
-	num_processed_params = 0
-
-	#REMOVE LATER
-	num_train_examples = 10000;
-	#REMOVE LATER
-	flag = true
-
-	# TO SEE GOSSIP WORK, set num_train_examples to 10,000, and num_paramservers to 2.
-	# I suggest running code like julia main.jl > debug.txt so you can search through output
-
-	state = MasterState(master_mailbox, shared_pserver_mailbox, paramservers, workers, num_train_examples, num_processed_examples, num_epoch, max_num_epoches, time_var, tau, num_workers, num_paramservers, examples_batch_size, batch_size, gossip_time, num_live_workers, params, num_processed_params)
+	state = MasterState(
+	num_train_examples=size(train_examples,2), 
+	max_num_epochs=100, 
+	tau=20.0,
+	num_workers=8,
+	num_paramservers=8,
+	examples_batch_size=100,
+	)
 	initialize_nodes(state)
 	
 	while state.num_live_workers > 0

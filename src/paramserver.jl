@@ -6,22 +6,27 @@ if DISPLAY_FILTERS
 	using Images, ImageView
 end
 
-type ParamServerState
+@with_kw type ParamServerState
 	params
 	master_mailbox
 	shared_pserver_mailbox
 	pserver_mailbox
-	accumulated_gradients
-	n_accumulated_gradients
+	accumulated_gradients=SimpleGradient(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1])
+	n_accumulated_gradients=0
 	index::Int
-	time_var
-	param_request_pending::Bool
-	tau
-	exit::Bool
+	time_var=now()
+	param_request_pending::Bool=false
+	tau=5
+	exit::Bool=false
 end
 
 function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index)
-	state = ParamServerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),master_mailbox,shared_pserver_mailbox,pserver_mailbox, SimpleGradient(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), 0,index,now(),false,5,false)
+	state = ParamServerState(
+	params=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),
+	master_mailbox=master_mailbox,
+	shared_pserver_mailbox=shared_pserver_mailbox,
+	pserver_mailbox=pserver_mailbox,
+	index=index)
 	println("[PARAM SERVER] initialized")
 
 	while !state.exit

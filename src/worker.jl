@@ -1,15 +1,15 @@
 ### Worker State ###
-type WorkerState
-	current_params::Parameter
+@with_kw type WorkerState
+	current_params::Parameter=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1])
 	master_mailbox
 	worker_mailbox
 	tau
-	time_var
-	param_request_pending::Bool
+	time_var=now()
+	param_request_pending::Bool=false
 	update_params
 	compute_gradient
 	learning_rate
-	exit
+	exit::Bool=false
 end
 
 include("gradient_computations.jl")
@@ -53,9 +53,15 @@ function worker(id, master_mailbox, worker_mailbox)
 	println("[WORKER] Initialized")
 
 	#update_params and compute_gradient are functions which do the obvious
-	update_params,compute_grad=AutoDiff.derivative(error,Any[dummy_weights1,dummy_biases1], Any[dummy_input,dummy_output])
+	update_params,compute_gradient=AutoDiff.derivative(loss,Any[dummy_weights1,dummy_biases1], Any[dummy_input,dummy_output])
 
-	state = WorkerState(SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]), master_mailbox, worker_mailbox, 1.0, now(), false, update_params, compute_grad, 0.0003, false)
+	state = WorkerState(
+	master_mailbox=master_mailbox,
+	worker_mailbox=worker_mailbox,
+	tau=1.0,
+	update_params=update_params, 
+	compute_gradient=compute_gradient, 
+	learning_rate=0.0003)
 
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
