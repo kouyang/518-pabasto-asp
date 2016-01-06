@@ -44,7 +44,7 @@ function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, ind
 			time_elapsed = Int(now() - state.time_var)
 			if time_elapsed >= state.tau * 1000 && !state.param_request_pending
 				println("[PARAM SERVER] Requesting parameter value updates")
-				println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
+				println("[PARAM SERVER] Time last parameter update request: $(time_elapsed)ms");
 				put!(state.shared_pserver_mailbox, ParameterUpdateRequestMessage(state.pserver_mailbox),low,high);
 				state.param_request_pending = true;
 			end
@@ -64,7 +64,7 @@ function handle(state::ParamServerState, message::ParameterUpdateMessage)
 	state.params.data = message.parameters.data
 	state.time_var = now()
 	state.param_request_pending=false
-	println("[PARAM SERVER] Param server has received and processed parameter value update")
+	println("[PARAM SERVER] Processed parameter value update")
 end
 
 function handle(state::ParamServerState, message::ParameterUpdateRequestMessage)

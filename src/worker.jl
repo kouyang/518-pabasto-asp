@@ -27,12 +27,12 @@ function handle(state::WorkerState, message::ParameterUpdateMessage)
 	state.current_params.data = message.parameters.data
 	state.time_var = now()
 	state.param_request_pending=false
-	println("[WORKER] Worker has received and processed parameter value update")
+	println("[WORKER] Processed parameter value update")
 end
 
 function handle(state::WorkerState, msg::AdaptiveControlPolicyMessage)
 	state.tau = msg.tau;
-	println("[WORKER] Worker has received and processed control policy message")
+	println("[WORKER] Processed control policy message")
 end
 
 function handle(state::WorkerState, msg::FinishOperationMessage)
@@ -69,7 +69,7 @@ function worker(id, master_mailbox, worker_mailbox)
 		time_elapsed = Int(now() - state.time_var)
 		if time_elapsed >= state.tau * 1000 && !state.param_request_pending
 			println("[WORKER] Requesting parameter value updates")
-			println("Time elapsed (in ms) since last parameter value update request is ", time_elapsed);
+			println("[WORKER] Time last parameter update request: $(time_elapsed)ms");
 			put!(state.master_mailbox, ParameterUpdateRequestMessage(state.worker_mailbox));
 			state.param_request_pending = true;
 		end
