@@ -6,7 +6,7 @@ using MNIST
 	master_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), myid())
 	shared_pserver_mailbox = RemoteChannel(() -> PABASTO.IntervalMailbox(), myid())
 	workers::Array = Tuple{Int, Any, Any}[]
-	paramservers::Array = Tuple{Int, Any}[]
+	paramservers::Array = Tuple{Int, Any, Any}[]
 	num_train_examples
 	num_processed_examples=0
 	num_epoch=1
@@ -40,7 +40,7 @@ function add_paramservers(state::MasterState, count)
 		#remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox,index)
 		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index)
 		@async wait(ref)
-		push!(state.paramservers, (id, pserver_mailbox))
+		push!(state.paramservers, (id,ref,pserver_mailbox))
 	end
 	state.num_live_pservers += count
 end
@@ -119,6 +119,8 @@ function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateMessage)
+	state.params=msg.parameters
+	#=
 	if state.params == nothing
 		state.params = msg.parameters
 	end
@@ -128,6 +130,7 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 	state.params = add(state.params, operand)
 
 	state.num_processed_params += 1
+	=#
 	
 end
 
@@ -140,8 +143,8 @@ function master()
 	train_examples, train_labels = traindata()
 
 	state = MasterState(
-	num_train_examples=size(train_examples,2), 
-	max_num_epochs=100, 
+	num_train_examples=10000,#size(train_examples,2), 
+	max_num_epochs=1,
 	tau=20.0,
 	num_workers=8,
 	num_paramservers=8,
@@ -155,17 +158,15 @@ function master()
 
 	state.num_paramservers = state.num_live_pservers
 	
-	# query each paramserver for parameters
-	for (id, ref, pserver_mailbox) in state.paramservers
-		put!(pserver_mailbox, ParameterRequestMessage())
-	end
-	
-	while state.num_processed_params < state.num_paramservers
+	# query the lead parameter server for 
+	put!(state.paramservers[1][3], ParameterUpdateRequestMessage(state.master_mailbox))
+
+	while state.params == nothing
 		handle(state,take!(state.master_mailbox))
 	end
 	
-	# all paramservers have sent parameters so shut them all down
-	for(id, ref, pserver_mailbox) in state.paramservers
+	# We got parameters so shut down all the paramservers
+	for (id, ref, pserver_mailbox) in state.paramservers
 		put!(pserver_mailbox, CeaseOperationMessage())
 	end
 	
@@ -173,4 +174,9 @@ function master()
 	f = open("params.jls", "w")
 	serialize(f, state.params.data)
 	close(f)
+
+
+	for (id,ref,mailbox) in cat(1,state.paramservers,state.workers)
+		wait(ref)
+	end
 end

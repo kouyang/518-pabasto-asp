@@ -56,7 +56,7 @@ function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, ind
 		end
 	end
 
-	put!(local_state.master_mailbox, CeasedOperationMessage(id))
+	put!(state.master_mailbox, CeasedOperationMessage(myid()))
 	println("[PARAM SERVER] Shutting down")
 end
 
@@ -96,7 +96,6 @@ function handle(state::ParamServerState,message::GradientUpdateMessage)
 	end
 end
 
-function handle(message::CeaseOperationMessage)
-	global local_state
-	local_state.exit = true
+function handle(state::ParamServerState,message::CeaseOperationMessage)
+	state.exit = true
 end
