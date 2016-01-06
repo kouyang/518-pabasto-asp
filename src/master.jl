@@ -144,10 +144,10 @@ function master()
 
 	state = MasterState(
 	num_train_examples=10000,#size(train_examples,2), 
-	max_num_epochs=1,
+	max_num_epochs=1000,
 	tau=20.0,
 	num_workers=8,
-	num_paramservers=8,
+	num_paramservers=3,
 	examples_batch_size=100,
 	)
 	initialize_nodes(state)

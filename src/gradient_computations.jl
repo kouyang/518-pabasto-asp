@@ -3,6 +3,11 @@ using MNIST
 
 type SimpleParameter <: Parameter
 	data
+	timestamp
+end
+
+function SimpleParameter(data)
+	return SimpleParameter(data,now())
 end
 
 type SimpleGradient <: Gradient
@@ -12,6 +17,7 @@ end
 function update(p::SimpleParameter, g::SimpleGradient)
 	# update p with parameter g
 	p.data-=g.data
+	p.timestamp=now()
 end
 
 function zero_gradient(p::SimpleParameter)

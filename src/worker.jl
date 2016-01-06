@@ -61,7 +61,7 @@ function worker(id, master_mailbox, worker_mailbox)
 	tau=1.0,
 	update_params=update_params, 
 	compute_gradient=compute_gradient, 
-	learning_rate=0.0003)
+	learning_rate=0.00003)
 
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
