@@ -30,7 +30,7 @@ function handle(state::WorkerState, message::TestExampleIndicesMessage)
 		accum+=loss(state.current_params, (example,label))
 	end
 
-	println("[WORKER] Sending gradient updates")
+	println("[WORKER] Sending test results")
 	put!(state.master_mailbox, TestLossMessage(accum/length(message.indices)))
 end
 
