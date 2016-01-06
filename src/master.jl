@@ -12,6 +12,8 @@ using MNIST
 	num_epoch=1
 	max_num_epochs
 	time_var=now()
+	compute_loss_timeout=5
+	compute_loss_last=now()
 	# parameters for adaptive control policy
 	tau
 
@@ -123,6 +125,10 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 	state.final_params=msg.parameters
 end
 
+function handle(state::MasterState,msg::TestLossMessage)
+	println("[MASTER] Test loss is $(msg.loss)")
+end
+
 function handle(state::MasterState,msg::Void)
 	println("[MASTER] Spinning")
 	sleep(1)
@@ -133,7 +139,7 @@ function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABA
 
 	state = MasterState(
 	num_train_examples=10000,#size(train_examples,2), 
-	max_num_epochs=1,
+	max_num_epochs=1000,
 	tau=20.0,
 	num_workers=8,
 	num_paramservers=3,
@@ -144,6 +150,11 @@ function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABA
 	
 	while state.num_live_workers > 0
 		handle(state,take!(state.master_mailbox))
+		if Int(now()-state.compute_loss_last)>state.compute_loss_timeout*1000
+			(id,ref,mailbox)=rand(state.workers)
+			put!(mailbox,TestExampleIndicesMessage(1:100))
+			state.compute_loss_last=now()
+		end
 	end
 
 	state.num_paramservers = state.num_live_pservers

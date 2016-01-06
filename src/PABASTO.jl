@@ -106,6 +106,12 @@ end
 type ExampleIndicesMessage
 	indices::Array{Int}
 end
+type TestExampleIndicesMessage
+	indices::Array{Int}
+end
+type TestLossMessage
+	loss::Real
+end
 
 type ExamplesRequestMessage
 	id::Int
@@ -150,6 +156,9 @@ end
 #ParameterUpdateMessage
 function priority(message_type,queue_length)
 	return queue_length
+end
+function priority(x::Type{TestExampleIndicesMessage},queue_length)
+	return 5*queue_length
 end
 
 function priority(x::Type{ParameterUpdateMessage},queue_length)

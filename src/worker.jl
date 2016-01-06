@@ -22,6 +22,17 @@ function handle(state::WorkerState, message::ExampleIndicesMessage)
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(myid(), state.worker_mailbox))
 end
+function handle(state::WorkerState, message::TestExampleIndicesMessage)
+	accum=0
+	for i in message.indices
+		example=trainfeatures(i)
+		label=map(x->if x==trainlabel(i); 1.0; else 0.0; end, 0:9)
+		accum+=loss(state.current_params, (example,label))
+	end
+
+	println("[WORKER] Sending gradient updates")
+	put!(state.master_mailbox, TestLossMessage(accum/length(message.indices)))
+end
 
 function handle(state::WorkerState, message::ParameterUpdateMessage)
 	state.current_params.data = message.parameters.data

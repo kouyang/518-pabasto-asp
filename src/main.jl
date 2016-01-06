@@ -3,7 +3,7 @@ function add_pabasto_procs(count)
 	refs=[remotecall(()->eval(Main, quote
 		if myid() != 1
 			#redirect_stderr(open("$(myid()).err", "w"))
-			#redirect_stdout(open("$(myid()).out", "w"))
+			redirect_stdout(open("$(myid()).out", "w"))
 		end
 		using PABASTO
 	end), id)
