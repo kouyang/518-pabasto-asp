@@ -1,6 +1,6 @@
 ### Param Server State ###
 
-const DISPLAY_FILTERS=true
+const DISPLAY_FILTERS=false
 
 if DISPLAY_FILTERS
 	using Images, ImageView
@@ -20,13 +20,13 @@ end
 	exit::Bool=false
 end
 
-function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index)
+function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index,starting_params)
 	if DISPLAY_FILTERS
 		global c = canvasgrid(4,5)
 	end			
 
 	state = ParamServerState(
-	params=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]),
+	params=starting_params,
 	master_mailbox=master_mailbox,
 	shared_pserver_mailbox=shared_pserver_mailbox,
 	pserver_mailbox=pserver_mailbox,
@@ -44,12 +44,6 @@ function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, ind
 			low=max(state.index/4,1)
 			high=min(state.index/2,state.index-1)
 			@assert high >= low
-			if state.n_accumulated_gradients > 2
-				println("[PARAM SERVER] Pushing gradients")
-				put!(state.shared_pserver_mailbox,GradientUpdateMessage(state.accumulated_gradients),low,high)
-				state.accumulated_gradients.data*=0
-				state.n_accumulated_gradients=0
-			end
 			time_elapsed = Int(now() - state.time_var)
 			if time_elapsed >= state.tau * 1000 && !state.param_request_pending
 				println("[PARAM SERVER] Requesting parameter value updates")
@@ -99,6 +93,15 @@ function handle(state::ParamServerState,message::GradientUpdateMessage)
 		println("[PARAM SERVER] Accumulating gradients")
 		state.accumulated_gradients.data+=fetch(message.gradient).data
 		state.n_accumulated_gradients+=1
+		if state.n_accumulated_gradients > 2
+			low=max(state.index/4,1)
+			high=min(state.index/2,state.index-1)
+			@assert high >= low
+			println("[PARAM SERVER] Pushing gradients")
+			put!(state.shared_pserver_mailbox,GradientUpdateMessage(state.accumulated_gradients),low,high)
+			state.accumulated_gradients.data*=0
+			state.n_accumulated_gradients=0
+		end
 	end
 	if DISPLAY_FILTERS
 		updateview(state)

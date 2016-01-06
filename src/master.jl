@@ -21,7 +21,8 @@ using MNIST
 	examples_batch_size
 	num_live_workers=0
 	num_live_pservers=0
-	params=nothing
+	final_params=nothing
+	starting_params::Parameter
 	num_processed_params=0
 end
 
@@ -38,7 +39,7 @@ function add_paramservers(state::MasterState, count)
 		index=length(state.paramservers)+1
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
 		#remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox,index)
-		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index)
+		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index,state.starting_params)
 		@async wait(ref)
 		push!(state.paramservers, (id,ref,pserver_mailbox))
 	end
@@ -54,7 +55,7 @@ function add_workers(state::MasterState, count)
 	ids = add_procs(count)
 	for id in ids
 		worker_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox)
+		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox,state.starting_params)
 		@async wait(ref)
 		push!(state.workers, (id, ref, worker_mailbox))
 	end
@@ -119,19 +120,7 @@ function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateMessage)
-	state.params=msg.parameters
-	#=
-	if state.params == nothing
-		state.params = msg.parameters
-	end
-
-	new_params = msg.parameters
-	operand = half_subtract(new_params, state.params)
-	state.params = add(state.params, operand)
-
-	state.num_processed_params += 1
-	=#
-	
+	state.final_params=msg.parameters
 end
 
 function handle(state::MasterState,msg::Void)
@@ -139,16 +128,17 @@ function handle(state::MasterState,msg::Void)
 	sleep(1)
 end
 
-function master()
+function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]))
 	train_examples, train_labels = traindata()
 
 	state = MasterState(
 	num_train_examples=10000,#size(train_examples,2), 
-	max_num_epochs=1000,
+	max_num_epochs=1,
 	tau=20.0,
 	num_workers=8,
 	num_paramservers=3,
 	examples_batch_size=100,
+	starting_params=starting_params
 	)
 	initialize_nodes(state)
 	
@@ -161,7 +151,7 @@ function master()
 	# query the lead parameter server for 
 	put!(state.paramservers[1][3], ParameterUpdateRequestMessage(state.master_mailbox))
 
-	while state.params == nothing
+	while state.final_params == nothing
 		handle(state,take!(state.master_mailbox))
 	end
 	
@@ -172,9 +162,8 @@ function master()
 	
 	# write params to disk
 	f = open("params.jls", "w")
-	serialize(f, state.params.data)
+	serialize(f, state.final_params)
 	close(f)
-
 
 	for (id,ref,mailbox) in cat(1,state.paramservers,state.workers)
 		wait(ref)

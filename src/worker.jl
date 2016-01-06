@@ -1,6 +1,6 @@
 ### Worker State ###
 @with_kw type WorkerState
-	current_params::Parameter=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1])
+	current_params::Parameter
 	master_mailbox
 	worker_mailbox
 	tau
@@ -49,7 +49,7 @@ function handle{T}(state::WorkerState, msg::T)
 end
 
 # main worker loop
-function worker(id, master_mailbox, worker_mailbox)
+function worker(id, master_mailbox, worker_mailbox,starting_params)
 	println("[WORKER] Initialized")
 
 	#update_params and compute_gradient are functions which do the obvious
@@ -61,7 +61,8 @@ function worker(id, master_mailbox, worker_mailbox)
 	tau=1.0,
 	update_params=update_params, 
 	compute_gradient=compute_gradient, 
-	learning_rate=0.00003)
+	learning_rate=0.00003,
+	current_params=starting_params)
 
 	println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
