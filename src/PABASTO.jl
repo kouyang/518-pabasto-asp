@@ -4,6 +4,11 @@ import Base: put!, wait, isready, take!, fetch
 using IntervalTrees
 using Parameters
 
+#override now to give millisecond precision
+function now()
+	return Dates.unix2datetime(time())
+end
+
 
 type IntervalMailbox <: AbstractChannel
 	data::Dict
@@ -25,7 +30,6 @@ end
 
 function take!(m::IntervalMailbox,position)
 	lock(m.lock)
-	n=length(values(m.data))
 	all_channels=shuffle(collect(m.data))
 	for (T,channel) in all_channels
 		i=IntervalTrees.firstintersection(channel,Interval{Real}(position-0.1,position+0.1))
@@ -37,6 +41,9 @@ function take!(m::IntervalMailbox,position)
 			IntervalTrees.deletefirst!(channel,Interval{Real}(interval.first,interval.last))
 			@assert channel.n==c-1
 			unlock(m.lock)
+			if channel.n > 10
+				println(STDERR,"Warning, IntervalMailbox channel backlog: $(T) $(channel.n)")
+			end
 			return interval.value
 		end
 	end
@@ -57,6 +64,9 @@ function put!{T}(m::Mailbox, v::T)
 		m.data[T]=Channel(100)
 	end
 	put!(m.data[T],v)
+	if length(m.data[T].data) > 10
+		println(STDERR, "Warning, Mailbox channel backlog: $(length(m.data[T].data))")
+	end
 	return m
 end
 
@@ -85,11 +95,12 @@ end
 ### Messages ###
 
 type GradientUpdateMessage
-	gradient::Future
+	gradient::RemoteChannel
 end
-
 function GradientUpdateMessage(gradient::Gradient)
-	GradientUpdateMessage(@spawnat myid() gradient)
+	c=RemoteChannel()
+	put!(c,gradient)
+	GradientUpdateMessage(c)
 end
 
 type ParameterUpdateRequestMessage
@@ -110,6 +121,7 @@ type TestExampleIndicesMessage
 	indices::Array{Int}
 end
 type TestLossMessage
+	#params::Parameter
 	loss::Real
 end
 

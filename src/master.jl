@@ -41,6 +41,7 @@ function add_paramservers(state::MasterState, count)
 		index=length(state.paramservers)+1
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
 		#remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox,index)
+		remotecall_fetch(PABASTO.initialize_view,id)
 		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index,state.starting_params)
 		@async wait(ref)
 		push!(state.paramservers, (id,ref,pserver_mailbox))
@@ -97,7 +98,6 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 		state.num_processed_examples = state.num_processed_examples + 1
 	end
 
-
 	put!(worker_mailbox, ExampleIndicesMessage(examples))
 	println("[MASTER] Assigned examples $(examples[1])-$(examples[end]) to worker $(id)")
 end
@@ -130,19 +130,19 @@ function handle(state::MasterState,msg::TestLossMessage)
 end
 
 function handle(state::MasterState,msg::Void)
-	println("[MASTER] Spinning")
-	sleep(1)
+	#println("[MASTER] Spinning")
+	yield()
 end
 
-function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]))
+function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
 	train_examples, train_labels = traindata()
 
 	state = MasterState(
-	num_train_examples=10000,#size(train_examples,2), 
-	max_num_epochs=1000,
+	num_train_examples=size(train_examples,2), 
+	max_num_epochs=100,
 	tau=20.0,
-	num_workers=8,
-	num_paramservers=3,
+	num_workers=2,
+	num_paramservers=1,
 	examples_batch_size=100,
 	starting_params=starting_params
 	)
@@ -152,7 +152,7 @@ function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABA
 		handle(state,take!(state.master_mailbox))
 		if Int(now()-state.compute_loss_last)>state.compute_loss_timeout*1000
 			(id,ref,mailbox)=rand(state.workers)
-			put!(mailbox,TestExampleIndicesMessage(1:100))
+			put!(mailbox,TestExampleIndicesMessage(1:300))
 			state.compute_loss_last=now()
 		end
 	end

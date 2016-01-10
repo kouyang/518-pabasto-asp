@@ -1,7 +1,7 @@
 function add_pabasto_procs(count)
 	ids = addprocs(count)
 	refs=[remotecall(()->eval(Main, quote
-		if myid() != 1
+		if myid() != 1 && myid() != 2
 			#redirect_stderr(open("$(myid()).err", "w"))
 			redirect_stdout(open("$(myid()).out", "w"))
 		end

@@ -11,7 +11,7 @@ end
 	master_mailbox
 	shared_pserver_mailbox
 	pserver_mailbox
-	accumulated_gradients=SimpleGradient(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1])
+	accumulated_gradients
 	n_accumulated_gradients=0
 	index::Int
 	time_var=now()
@@ -19,14 +19,17 @@ end
 	tau=0.5
 	exit::Bool=false
 end
-
-function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index,starting_params)
+function initialize_view()
 	if DISPLAY_FILTERS
 		global c = canvasgrid(4,5)
 	end			
+end
+
+function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index,starting_params)
 
 	state = ParamServerState(
 	params=starting_params,
+	accumulated_gradients=SimpleGradient(sample_parameters(var=0.0),starting_params.timestamp,starting_params.discrete_timestamp,0),
 	master_mailbox=master_mailbox,
 	shared_pserver_mailbox=shared_pserver_mailbox,
 	pserver_mailbox=pserver_mailbox,
@@ -59,12 +62,13 @@ function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, ind
 end
 
 function handle(state:: ParamServerState, message::Void)
+	yield()
 	#println("[PARAM SERVER] Spinning")
 	#sleep(0.01)
 end
 
 function handle(state::ParamServerState, message::ParameterUpdateMessage)
-	state.params.data = message.parameters.data
+	state.params = message.parameters
 	state.time_var = now()
 	state.param_request_pending=false
 	println("[PARAM SERVER] Processed parameter value update")
@@ -72,7 +76,9 @@ end
 
 function handle(state::ParamServerState, message::ParameterUpdateRequestMessage)
 	println("[PARAM SERVER] Reading params")
-	put!(message.worker_mailbox,ParameterUpdateMessage(state.params))
+	@schedule begin
+		put!(message.worker_mailbox,ParameterUpdateMessage(state.params))
+	end
 end
 
 function updateview(state)
@@ -88,7 +94,7 @@ end
 function handle(state::ParamServerState,message::GradientUpdateMessage)
 	if state.index==1
 		println("[PARAM SERVER] Committing gradients")
-		update(state.params, fetch(message.gradient))
+		update(state.params, take!(message.gradient))
 	else
 		println("[PARAM SERVER] Accumulating gradients")
 		state.accumulated_gradients.data+=fetch(message.gradient).data
