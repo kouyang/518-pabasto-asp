@@ -90,6 +90,9 @@ end
 
 function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABASTO.dummy_biases1]))
 	train_examples, train_labels = traindata()
+	if DISPLAY_FILTERS
+		global c = canvasgrid(4,5)
+	end
 
 	state = MasterState(
 		num_train_examples=10000,#size(train_examples,2),
@@ -124,6 +127,7 @@ function master(;starting_params=SimpleParameter(Any[PABASTO.dummy_weights1,PABA
 			handle(state,take!(state.master_mailbox))
 		end
 		update(state.params, state.accumulated_gradients)
+		state.accumulated_gradients.data *= 0
 
 		for (id, ref, worker_mailbox) in state.workers
 			put!(worker_mailbox, ParameterUpdateMessage(state.params))
