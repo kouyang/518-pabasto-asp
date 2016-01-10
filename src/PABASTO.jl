@@ -92,15 +92,8 @@ function GradientUpdateMessage(gradient::Gradient)
 	GradientUpdateMessage(@spawnat myid() gradient)
 end
 
-type ParameterUpdateRequestMessage
-	worker_mailbox::RemoteChannel
-end
-
 type ParameterUpdateMessage
 	parameters
-end
-
-type ParameterRequestMessage
 end
 
 type ExampleIndicesMessage
@@ -111,18 +104,6 @@ type TestExampleIndicesMessage
 end
 type TestLossMessage
 	loss::Real
-end
-
-type ExamplesRequestMessage
-	id::Int
-	worker_mailbox::RemoteChannel
-end
-
-type CeaseOperationMessage
-end
-
-type CeasedOperationMessage
-	id::Int
 end
 
 type FinishOperationMessage
@@ -172,6 +153,5 @@ end
 
 # todo: split into separate modules
 include("master.jl")
-include("paramserver.jl")
 include("worker.jl")
 end
