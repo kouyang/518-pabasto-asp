@@ -1,5 +1,7 @@
+using ClusterManagers
+
 function add_pabasto_procs(count)
-	ids = addprocs(count)
+	ids = addprocs_slurm(count)
 	refs=[remotecall(()->eval(Main, quote
 		if myid() != 1 && myid() != 2
 			#redirect_stderr(open("$(myid()).err", "w"))
