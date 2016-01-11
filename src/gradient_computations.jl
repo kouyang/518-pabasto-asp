@@ -39,7 +39,7 @@ function loss(params::Array,datum)
 	weights2=params[3]
 	biases2=params[4]
 
-	layer1=sigmoid(weights1*datum[1].+biases1)
+	layer1=my_tanh(weights1*datum[1].+biases1)
 	layer2=(weights2*layer1.+biases2)
 	tmp=exp(layer2)
 	prediction=tmp./sum(tmp)
@@ -52,19 +52,23 @@ function loss(params::SimpleParameter, datum)
 end
 
 #Dummy inputs used for initializing variables in the gradient computation
-function sample_parameters(;seed=1,var=0.001)
+function sample_parameters(;seed=1,var=1.0)
 	srand(seed)
-	weights1=0.01*randn((500,784))
-	biases1=0.01*randn((500,))
+	n0=784
+	n1=300
+	n2=10
+	weights1=var*sqrt(2/(n0+n1))*randn((n1,n0))
+	biases1=var*0.00001*randn((n1,))
 	
-	weights2=0.01*randn((10,500))
-	biases2=0.01*randn((10,))
+	weights2=sqrt(2/(n1+n2))*randn((n2,n1))
+	biases2=0.00001*rand((n2,))
 
 	return Any[weights1,biases1,weights2,biases2]
 end
 function sample_input_output()
 	dummy_input=zeros(Float64,(784,))
 	dummy_output=zeros(Float64,(10,))
+	dummy_output[1]=1
 	return (dummy_input, dummy_output)
 end
 
@@ -75,12 +79,13 @@ function compute_gradient(state::WorkerState,dataset)
 	state.update_params(state.current_params.data)
 	g=0
 	t=now()
-	for i in ones(Int,length(dataset))
+	for i in dataset
 		example=trainfeatures(i)
 		label=map(x->if x==trainlabel(i); 1.0; else 0.0; end, 0:9)
 		g+=state.compute_gradient((example,label))
 		yield()
 	end
+	sleep(0.2)
 	println("[WORKER] Computed gradients in $(now()-t)")
-	return SimpleGradient(state.learning_rate*g/length(dataset),state.current_params.timestamp,state.current_params.discrete_timestamp,1)
+	return SimpleGradient(state.hyper_params.learning_rate*g/length(dataset),state.current_params.timestamp,state.current_params.discrete_timestamp,1)
 end

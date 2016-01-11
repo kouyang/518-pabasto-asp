@@ -59,6 +59,13 @@ type Mailbox <: AbstractChannel
 	end
 end
 
+function isready(m::Mailbox,T)
+	if !haskey(m.data,T)
+		m.data[T]=Channel(100)
+	end
+	isready(m.data[T])
+end
+
 function put!{T}(m::Mailbox, v::T)
 	if !haskey(m.data,T)
 		m.data[T]=Channel(100)
@@ -121,7 +128,7 @@ type TestExampleIndicesMessage
 	indices::Array{Int}
 end
 type TestLossMessage
-	#params::Parameter
+	params::Parameter
 	loss::Real
 end
 

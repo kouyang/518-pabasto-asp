@@ -3,7 +3,7 @@ __precompile__()
 module AutoDiff
 using DataStructures
 export Constant,Variable, Call, CoTangent, Lift, val
-export rect_lin,sigmoid,convolve
+export my_tanh,rect_lin,sigmoid,convolve
 export minimize
 
 import Base: (+), (-), (*), (/), (^), 
@@ -174,6 +174,9 @@ include("AutoDiff/call_defs.jl")
 
 function sigmoid(x)
 	1 ./(1 .+exp(-x))
+end
+function my_tanh(x)
+	sigmoid(x).-0.5
 end
 function rect_lin(x)
 	max(x,0)

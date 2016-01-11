@@ -25,7 +25,7 @@ function initialize_view()
 	end			
 end
 
-function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index,starting_params)
+function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, index,starting_params, hyper_params)
 
 	state = ParamServerState(
 	params=starting_params,

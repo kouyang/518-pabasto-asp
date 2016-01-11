@@ -15,17 +15,23 @@ using MNIST
 	compute_loss_timeout=5
 	compute_loss_last=now()
 	# parameters for adaptive control policy
-	tau
+	hyper_params
 
 	num_workers
 	num_paramservers
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
-	examples_batch_size
 	num_live_workers=0
 	num_live_pservers=0
 	final_params=nothing
 	starting_params::Parameter
 	num_processed_params=0
+	best=0.0
+end
+
+@with_kw type HyperParameters
+	learning_rate
+	examples_batch_size
+	tau
 end
 
 ### INITIALIZATION ###
@@ -42,7 +48,7 @@ function add_paramservers(state::MasterState, count)
 		pserver_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
 		#remotecall_fetch(paramserver_setup, id, state.master_mailbox, pserver_mailbox,index)
 		remotecall_fetch(PABASTO.initialize_view,id)
-		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index,state.starting_params)
+		ref = @spawnat id PABASTO.paramserver(state.master_mailbox, state.shared_pserver_mailbox,pserver_mailbox,index,state.starting_params,state.hyper_params)
 		@async wait(ref)
 		push!(state.paramservers, (id,ref,pserver_mailbox))
 	end
@@ -58,7 +64,7 @@ function add_workers(state::MasterState, count)
 	ids = add_procs(count)
 	for id in ids
 		worker_mailbox = RemoteChannel(() -> PABASTO.Mailbox(), id)
-		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox,state.starting_params)
+		ref = @spawnat id PABASTO.worker(id, state.master_mailbox, worker_mailbox,state.starting_params,state.hyper_params)
 		@async wait(ref)
 		push!(state.workers, (id, ref, worker_mailbox))
 	end
@@ -91,7 +97,7 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 
 	count = 0;
 	examples = []
-	while count < state.examples_batch_size && state.num_processed_examples < state.num_train_examples
+	while count < state.hyper_params.examples_batch_size && state.num_processed_examples < state.num_train_examples
 		example_id = state.num_processed_examples + 1
 		push!(examples, example_id)
 		count = count + 1
@@ -126,7 +132,14 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 end
 
 function handle(state::MasterState,msg::TestLossMessage)
-	println("[MASTER] Test loss is $(msg.loss)")
+	println("[MASTER] Test accuracy is $(-msg.loss)")
+
+	f = open("params$(
+	@sprintf "%06d" msg.params.discrete_timestamp
+	)-acc$(-msg.loss).jls", "w")
+	serialize(f, msg.params)
+	close(f)
+
 end
 
 function handle(state::MasterState,msg::Void)
@@ -136,18 +149,24 @@ end
 
 function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
 	train_examples, train_labels = traindata()
+ #starting_params=deserialize(open("params020015-acc0.749974839516982.jls","r"))
+
+	hyper_params=HyperParameters(
+	examples_batch_size=100,
+	learning_rate=10,
+	tau=1.0,
+	)
 
 	state = MasterState(
 	num_train_examples=size(train_examples,2), 
-	max_num_epochs=100,
-	tau=20.0,
+	max_num_epochs=1000,
 	num_workers=2,
 	num_paramservers=1,
-	examples_batch_size=100,
+	hyper_params=hyper_params,
 	starting_params=starting_params
 	)
 	initialize_nodes(state)
-	
+
 	while state.num_live_workers > 0
 		handle(state,take!(state.master_mailbox))
 		if Int(now()-state.compute_loss_last)>state.compute_loss_timeout*1000
@@ -158,25 +177,25 @@ function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
 	end
 
 	state.num_paramservers = state.num_live_pservers
-	
+
 	# query the lead parameter server for 
-	put!(state.paramservers[1][3], ParameterUpdateRequestMessage(state.master_mailbox))
+		put!(state.paramservers[1][3], ParameterUpdateRequestMessage(state.master_mailbox))
 
-	while state.final_params == nothing
-		handle(state,take!(state.master_mailbox))
-	end
-	
-	# We got parameters so shut down all the paramservers
-	for (id, ref, pserver_mailbox) in state.paramservers
-		put!(pserver_mailbox, CeaseOperationMessage())
-	end
-	
-	# write params to disk
-	f = open("params.jls", "w")
-	serialize(f, state.final_params)
-	close(f)
+		while state.final_params == nothing
+			handle(state,take!(state.master_mailbox))
+		end
 
-	for (id,ref,mailbox) in cat(1,state.paramservers,state.workers)
-		wait(ref)
+		# We got parameters so shut down all the paramservers
+		for (id, ref, pserver_mailbox) in state.paramservers
+			put!(pserver_mailbox, CeaseOperationMessage())
+		end
+
+		# write params to disk
+		f = open("params.jls", "w")
+		serialize(f, state.final_params)
+		close(f)
+
+		for (id,ref,mailbox) in cat(1,state.paramservers,state.workers)
+			wait(ref)
+		end
 	end
-end
