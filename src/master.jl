@@ -160,7 +160,7 @@ function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
 	state = MasterState(
 	num_train_examples=size(train_examples,2), 
 	max_num_epochs=1000,
-	num_workers=2,
+	num_workers=4,
 	num_paramservers=1,
 	hyper_params=hyper_params,
 	starting_params=starting_params

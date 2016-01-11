@@ -1,11 +1,14 @@
 using ClusterManagers
 
+all_ids = addprocs(SlurmManager(8))
 function add_pabasto_procs(count)
-	ids = addprocs_slurm(count)
+	@assert count <= length(all_ids)
+	ids = all_ids[1:count]
+	global all_ids = all_ids[count+1:end]
 	refs=[remotecall(()->eval(Main, quote
-		if myid() != 1 && myid() != 2
+		if myid() != 1
 			#redirect_stderr(open("$(myid()).err", "w"))
-			redirect_stdout(open("$(myid()).out", "w"))
+			#redirect_stdout(open("$(myid()).out", "w"))
 		end
 		using PABASTO
 	end), id)

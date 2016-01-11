@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+#SBATCH -N 8                  ## Node count
+#SBATCH --ntasks-per-node=1   ## Processors per node
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=4000
+#
+
+julia-0.5 main.jl
