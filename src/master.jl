@@ -10,35 +10,30 @@ using MNIST
 	num_train_examples
 	num_processed_examples=0
 	num_epoch=1
-	max_num_epochs
 	time_var=now()
-	compute_loss_timeout=5
+	compute_loss_timeout=10
 	compute_loss_last=now()
+
+	reevaluate_policy_timeout=10
+	reevaluate_policy_last=now()
+
 	# parameters for adaptive control policy
 	hyper_params
 
-	num_workers
-	num_paramservers
 	# number of examples the master sends to worker in response to ExamplesRequestMessage
 	num_live_workers=0
 	num_live_pservers=0
 	final_params=nothing
 	starting_params::Parameter
 	num_processed_params=0
-	best=0.0
-end
-
-@with_kw type HyperParameters
-	learning_rate
-	examples_batch_size
-	tau
+	save_folder=""
 end
 
 ### INITIALIZATION ###
 
 function initialize_nodes(state::MasterState)
-	add_paramservers(state, state.num_paramservers)
-	add_workers(state, state.num_workers)
+	add_paramservers(state, state.hyper_params.num_paramservers)
+	add_workers(state, state.hyper_params.num_workers)
 end
 
 function add_paramservers(state::MasterState, count)
@@ -81,7 +76,7 @@ end
 # Handle request from workers for more examples
 function handle(state::MasterState,request::ExamplesRequestMessage)
 
-	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.max_num_epochs
+	if state.num_processed_examples >= state.num_train_examples && state.num_epoch < state.hyper_params.max_num_epochs
 		state.num_processed_examples = 0;
 		state.num_epoch = state.num_epoch + 1;
 	elseif state.num_processed_examples >= state.num_train_examples
@@ -116,6 +111,25 @@ function handle(state::MasterState,msg::CeasedOperationMessage)
 	state.num_live_pservers -= 1
 end
 
+function handle(state::MasterState,msg::AdaptiveControlPolicyMessage)
+	#rebroadcast the control policy updates
+	for (id, ref, pserver_mailbox) in state.paramservers
+		put!(pserver_mailbox, msg)
+	end
+	for (id, ref, worker_mailbox) in state.workers
+		put!(worker_mailbox, msg)
+	end
+	state.hyper_params=msg.hyper_params
+	
+	nextraworkers= state.hyper_params.num_workers-length(state.workers)
+	if nextraworkers>0
+		add_workers(state,nextraworkers)
+		println("[MASTER] Adding new worker $(length(state.workers))")
+	end
+
+	println("[MASTER] Broadcast policy update")
+end
+
 function handle(state::MasterState,msg::GradientUpdateMessage)
 	println("[MASTER] Dispatching GradientUpdateMessage")
 	#any paramserver between 1 and 10000 can handle the gradinet update message
@@ -134,7 +148,7 @@ end
 function handle(state::MasterState,msg::TestLossMessage)
 	println("[MASTER] Test accuracy is $(-msg.loss)")
 
-	f = open("params$(
+	f = open("$(state.save_folder)params$(
 	@sprintf "%06d" msg.params.discrete_timestamp
 	)-acc$(-msg.loss).jls", "w")
 	serialize(f, msg.params)
@@ -147,23 +161,23 @@ function handle(state::MasterState,msg::Void)
 	yield()
 end
 
-function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
-	train_examples, train_labels = traindata()
- #starting_params=deserialize(open("params020015-acc0.749974839516982.jls","r"))
-
+function master(;starting_params=SimpleParameter(sample_parameters(seed=1)),save_folder="",
 	hyper_params=HyperParameters(
 	examples_batch_size=100,
-	learning_rate=10,
+	learning_rate=0.2,
 	tau=1.0,
-	)
+	num_workers=2,
+	num_paramservers=1,
+	max_num_epochs=10,
+	))
+	train_examples, train_labels = traindata()
+
 
 	state = MasterState(
 	num_train_examples=size(train_examples,2), 
-	max_num_epochs=1000,
-	num_workers=2,
-	num_paramservers=1,
 	hyper_params=hyper_params,
-	starting_params=starting_params
+	starting_params=starting_params,
+	save_folder=save_folder
 	)
 	initialize_nodes(state)
 
@@ -174,9 +188,14 @@ function master(;starting_params=SimpleParameter(sample_parameters(seed=1)))
 			put!(mailbox,TestExampleIndicesMessage(1:300))
 			state.compute_loss_last=now()
 		end
+		if Int(now()-state.reevaluate_policy_last)>state.reevaluate_policy_timeout*1000
+			(id,ref,mailbox)=rand(state.workers)
+			put!(mailbox, ReevaluatePolicyMessage(1:100))
+			state.reevaluate_policy_last=now()
+		end
 	end
 
-	state.num_paramservers = state.num_live_pservers
+	state.hyper_params.num_paramservers = state.num_live_pservers
 
 	# query the lead parameter server for 
 		put!(state.paramservers[1][3], ParameterUpdateRequestMessage(state.master_mailbox))

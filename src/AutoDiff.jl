@@ -176,7 +176,7 @@ function sigmoid(x)
 	1 ./(1 .+exp(-x))
 end
 function my_tanh(x)
-	sigmoid(x).-0.5
+	2.0 .* sigmoid(2.0 .* x) .- 1.0
 end
 function rect_lin(x)
 	max(x,0)

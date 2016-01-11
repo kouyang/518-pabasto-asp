@@ -18,6 +18,7 @@ end
 	param_request_pending::Bool=false
 	tau=0.5
 	exit::Bool=false
+	hyper_params::HyperParameters
 end
 function initialize_view()
 	if DISPLAY_FILTERS
@@ -33,7 +34,9 @@ function paramserver(master_mailbox, shared_pserver_mailbox,pserver_mailbox, ind
 	master_mailbox=master_mailbox,
 	shared_pserver_mailbox=shared_pserver_mailbox,
 	pserver_mailbox=pserver_mailbox,
-	index=index)
+	index=index,
+	hyper_params=hyper_params
+	)
 	println("[PARAM SERVER] initialized")
 
 	while !state.exit

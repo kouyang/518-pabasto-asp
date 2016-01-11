@@ -89,8 +89,24 @@ function take!(m::Mailbox)
 	end
 end
 
+function take!(m::Mailbox,T)
+	if !haskey(m.data,T)
+		m.data[T]=Channel(100)
+	end
+	take!(m.data[T])
+end
+
 
 ### Parameters ###
+@with_kw type HyperParameters
+	learning_rate
+	examples_batch_size
+	tau
+	num_workers
+	num_paramservers
+	max_num_epochs
+end
+
 abstract Parameter
 abstract Gradient
 type ConcreteParameter <: Parameter
@@ -127,6 +143,9 @@ end
 type TestExampleIndicesMessage
 	indices::Array{Int}
 end
+type ReevaluatePolicyMessage
+	indices::Array{Int}
+end
 type TestLossMessage
 	params::Parameter
 	loss::Real
@@ -152,11 +171,7 @@ type FinishedOperationMessage
 end
 
 type AdaptiveControlPolicyMessage
-	tau::Float64
-	num_workers::Int
-	num_paramservers::Int
-	example_batch_size::Int
-	gossip_time::Float64
+	hyper_params::HyperParameters
 end
 
 function update(p::Parameter, g::Gradient)
@@ -186,6 +201,14 @@ end
 
 function priority(x::Type{FinishOperationMessage},queue_length)
 	return -1
+end
+
+function priority(x::Type{AdaptiveControlPolicyMessage},queue_length)
+	return 100*queue_length
+end
+
+function priority(x::Type{ReevaluatePolicyMessage},queue_length)
+	return 10*queue_length
 end
 
 
