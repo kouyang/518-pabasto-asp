@@ -21,10 +21,10 @@ function handle(state::WorkerState, message::ExampleIndicesMessage)
 	handle(state,take!(state.worker_mailbox,ParameterUpdateMessage))
 
 	grad=compute_gradient(state, message.indices)
-	println("[WORKER] Sending gradient updates")
+	my_println("[WORKER] Sending gradient updates")
 	put!(state.master_mailbox, GradientUpdateMessage(grad))
 
-	println("[WORKER] Requesting examples")
+	my_println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(myid(), state.worker_mailbox))
 end
 function handle(state::WorkerState, message::TestExampleIndicesMessage)
@@ -36,14 +36,14 @@ function handle(state::WorkerState, message::TestExampleIndicesMessage)
 		yield()
 	end
 
-	println("[WORKER] Sending test results")
+	my_println("[WORKER] Sending test results")
 	put!(state.master_mailbox, TestLossMessage(state.current_params,accum/length(message.indices)))
 end
 function Base.dot(a::Array,b::Array)
 	return vecdot(a,b)
 end
 function handle(state::WorkerState, message::ReevaluatePolicyMessage)
-	println("[WORKER] Computing gradients")
+	my_println("[WORKER] Computing gradients")
 	params=state.current_params.data
 	state.update_params(params)
 	g1=0
@@ -69,26 +69,26 @@ function handle(state::WorkerState, message::ReevaluatePolicyMessage)
 	a=(1.0-vecdot(g1,g2)/sqrt(vecdot(g1,g1)*vecdot(g2,g2)))/sqrt(vecdot(delta,delta))
 	b=vecdot(g1,g1)
 	
-	println("[WORKER] ASP features: $(a)  $(b)")
+	my_println("[WORKER] ASP features: $(a)  $(b)")
 
 	put!(state.master_mailbox,AdaptiveControlPolicyMessage(state.hyper_params))	
 end
 
 function handle(state,message::AdaptiveControlPolicyMessage)
 	state.hyper_params=message.hyper_params
-	println("[WORKER/PARAMSERVER] Committed policy update")
+	my_println("[WORKER/PARAMSERVER] Committed policy update")
 end
 
 function handle(state::WorkerState, message::ParameterUpdateMessage)
 	state.current_params = message.parameters
 	state.time_var = now()
 	state.param_request_pending=false
-	println("[WORKER] Processed parameter value update")
+	my_println("[WORKER] Processed parameter value update")
 end
 
 function handle(state::WorkerState, msg::AdaptiveControlPolicyMessage)
 	state.hyper_params = msg.hyper_params;
-	println("[WORKER] Processed control policy message")
+	my_println("[WORKER] Processed control policy message")
 end
 
 function handle(state::WorkerState, msg::FinishOperationMessage)
@@ -96,17 +96,17 @@ function handle(state::WorkerState, msg::FinishOperationMessage)
 end
 
 function handle(state::WorkerState, msg::Void)
-	#println("[WORKER] Spinning")
+	#my_println("[WORKER] Spinning")
 	yield()
 end
 
 function handle{T}(state::WorkerState, msg::T)
-	println("Handler not defined for $(T)")
+	my_println("Handler not defined for $(T)")
 end
 
 # main worker loop
 function worker(id, master_mailbox, worker_mailbox,starting_params,hyper_params)
-	println("[WORKER] Initialized")
+	my_println("[WORKER] Initialized")
 
 	#update_params and compute_gradient are functions which do the obvious
 	update_params,compute_gradient=AutoDiff.derivative(loss,starting_params.data, sample_input_output())
@@ -122,7 +122,7 @@ function worker(id, master_mailbox, worker_mailbox,starting_params,hyper_params)
 	hyper_params=hyper_params
 	)
 
-	println("[WORKER] Requesting examples")
+	my_println("[WORKER] Requesting examples")
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
 	put!(state.master_mailbox, ExamplesRequestMessage(id, state.worker_mailbox))
@@ -134,8 +134,8 @@ function worker(id, master_mailbox, worker_mailbox,starting_params,hyper_params)
 		#=
 		time_elapsed = Int(now() - state.time_var)
 		if time_elapsed >= state.hyper_params.tau * 1000 && !state.param_request_pending
-			println("[WORKER] Requesting parameter value updates")
-			println("[WORKER] Time last parameter update request: $(time_elapsed)ms");
+			my_println("[WORKER] Requesting parameter value updates")
+			my_println("[WORKER] Time last parameter update request: $(time_elapsed)ms");
 			put!(state.master_mailbox, ParameterUpdateRequestMessage(state.worker_mailbox));
 			state.param_request_pending = true;
 		end
@@ -143,5 +143,5 @@ function worker(id, master_mailbox, worker_mailbox,starting_params,hyper_params)
 	end
 
 	put!(state.master_mailbox, FinishedOperationMessage(id))
-	println("[WORKER] Shutting down")
+	my_println("[WORKER] Shutting down")
 end

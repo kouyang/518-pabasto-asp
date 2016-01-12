@@ -3,6 +3,11 @@ module PABASTO
 import Base: put!, wait, isready, take!, fetch
 using IntervalTrees
 using Parameters
+my_stdout=open("$(myid()).out","w")
+function my_println(s)
+	println(my_stdout,s)
+	flush(my_stdout)
+end
 
 #override now to give millisecond precision
 function now()
@@ -42,7 +47,7 @@ function take!(m::IntervalMailbox,position)
 			@assert channel.n==c-1
 			unlock(m.lock)
 			if channel.n > 10
-				println(STDERR,"Warning, IntervalMailbox channel backlog: $(T) $(channel.n)")
+				my_println("Warning, IntervalMailbox channel backlog: $(T) $(channel.n)")
 			end
 			return interval.value
 		end
@@ -72,7 +77,7 @@ function put!{T}(m::Mailbox, v::T)
 	end
 	put!(m.data[T],v)
 	if length(m.data[T].data) > 10
-		println(STDERR, "Warning, Mailbox channel backlog: $(length(m.data[T].data))")
+		my_println("Warning, Mailbox channel backlog: $(length(m.data[T].data))")
 	end
 	return m
 end

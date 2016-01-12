@@ -100,7 +100,7 @@ function handle(state::MasterState,request::ExamplesRequestMessage)
 	end
 
 	put!(worker_mailbox, ExampleIndicesMessage(examples))
-	println("[MASTER] Assigned examples $(examples[1])-$(examples[end]) to worker $(id)")
+	my_println("[MASTER] Assigned examples $(examples[1])-$(examples[end]) to worker $(id)")
 end
 
 function handle(state::MasterState,msg::FinishedOperationMessage)
@@ -124,20 +124,20 @@ function handle(state::MasterState,msg::AdaptiveControlPolicyMessage)
 	nextraworkers= state.hyper_params.num_workers-length(state.workers)
 	if nextraworkers>0
 		add_workers(state,nextraworkers)
-		println("[MASTER] Adding new worker $(length(state.workers))")
+		my_println("[MASTER] Adding new worker $(length(state.workers))")
 	end
 
-	println("[MASTER] Broadcast policy update")
+	my_println("[MASTER] Broadcast policy update")
 end
 
 function handle(state::MasterState,msg::GradientUpdateMessage)
-	println("[MASTER] Dispatching GradientUpdateMessage")
+	my_println("[MASTER] Dispatching GradientUpdateMessage")
 	#any paramserver between 1 and 10000 can handle the gradinet update message
 	put!(state.shared_pserver_mailbox,msg,1,10000)
 end
 
 function handle(state::MasterState,msg::ParameterUpdateRequestMessage)
-	println("[MASTER] Dispatching ParameterUpdateRequestMessage")
+	my_println("[MASTER] Dispatching ParameterUpdateRequestMessage")
 	put!(state.shared_pserver_mailbox,msg,1,10000)
 end
 
@@ -146,7 +146,7 @@ function handle(state::MasterState,msg::ParameterUpdateMessage)
 end
 
 function handle(state::MasterState,msg::TestLossMessage)
-	println("[MASTER] Test accuracy is $(-msg.loss)")
+	my_println("[MASTER] Test accuracy is $(-msg.loss)")
 
 	f = open("$(state.save_folder)params$(
 	@sprintf "%06d" msg.params.discrete_timestamp
@@ -157,7 +157,7 @@ function handle(state::MasterState,msg::TestLossMessage)
 end
 
 function handle(state::MasterState,msg::Void)
-	#println("[MASTER] Spinning")
+	#my_println("[MASTER] Spinning")
 	yield()
 end
 

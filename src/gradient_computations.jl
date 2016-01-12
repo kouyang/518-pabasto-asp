@@ -20,7 +20,7 @@ end
 
 function update(p::SimpleParameter, g::SimpleGradient)
 	# update p with parameter g
-	println("[PARAM SERVER] Staleness: $(p.timestamp-g.timestamp), $(p.discrete_timestamp-g.discrete_timestamp)")
+	my_println("[PARAM SERVER] Staleness: $(p.timestamp-g.timestamp), $(p.discrete_timestamp-g.discrete_timestamp)")
 	p.data-=g.data
 	p.timestamp = now()
 	p.discrete_timestamp += g.n_aggregated
@@ -97,7 +97,7 @@ end
 
 #assume dataset is a list of indices
 function compute_gradient(state::WorkerState,dataset)
-	println("[WORKER] Computing gradients")
+	my_println("[WORKER] Computing gradients")
 	state.update_params(state.current_params.data)
 	g=0
 	t=now()
@@ -107,6 +107,6 @@ function compute_gradient(state::WorkerState,dataset)
 		g+=state.compute_gradient((example,label))
 		yield()
 	end
-	println("[WORKER] Computed gradients in $(now()-t)")
+	my_println("[WORKER] Computed gradients in $(now()-t)")
 	return SimpleGradient(state.hyper_params.learning_rate*g/length(dataset),state.current_params.timestamp,state.current_params.discrete_timestamp,1)
 end
